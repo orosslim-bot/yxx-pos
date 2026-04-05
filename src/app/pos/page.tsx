@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Product, CartItem } from "@/lib/types";
@@ -8,24 +8,28 @@ import { checkout } from "./actions";
 
 export default function PosPage() {
   const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<{ id: number; name: string }[]>(
-    []
-  );
+  const [categories, setCategories] = useState<{ id: number; name: string }[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [activeCategory, setActiveCategory] = useState<number | "all">("all");
   const [showCart, setShowCart] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<"cash" | "linepay">(
-    "cash"
-  );
+  const [paymentMethod, setPaymentMethod] = useState<"cash" | "linepay">("cash");
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [userEmail, setUserEmail] = useState("");
 
+  // QR Scanner
+  const [showScanner, setShowScanner] = useState(false);
+  const [scanMsg, setScanMsg] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const scanControlsRef = useRef<{ stop: () => void } | null>(null);
+  const lastScanRef = useRef({ text: "", time: 0 });
+  // ref 確保 scanner callback 永遠拿到最新的 products / addToCart
+  const handleScanResultRef = useRef<(text: string) => void>(() => {});
+
   useEffect(() => {
     const supabase = createClient();
-
     async function load() {
       const [{ data: prods }, { data: cats }, { data: authData }] =
         await Promise.all([
@@ -52,7 +56,6 @@ export default function PosPage() {
         setIsAdmin(profile?.role === "admin");
       }
     }
-
     load();
   }, []);
 
@@ -113,6 +116,83 @@ export default function PosPage() {
     setCart((prev) => prev.filter((i) => i.product.id !== productId));
   }
 
+  // ── QR Scanner ─────────────────────────────────────────────
+  // 每次 render 更新 ref，確保 scanner callback 拿到最新 products
+  handleScanResultRef.current = (text: string) => {
+    const now = Date.now();
+    const sku = text.trim();
+
+    // debounce：同一個 SKU 2.5 秒內不重複加入
+    if (
+      sku === lastScanRef.current.text &&
+      now - lastScanRef.current.time < 2500
+    ) {
+      return;
+    }
+    lastScanRef.current = { text: sku, time: now };
+
+    const product = products.find((p) => p.sku === sku);
+    if (!product) {
+      setScanMsg(`❓ 找不到 SKU：${sku}`);
+      return;
+    }
+    if (product.stock <= 0) {
+      setScanMsg(`❌「${product.name}」庫存不足`);
+      return;
+    }
+    addToCart(product);
+    setScanMsg(`✅ 已加入：${product.name}（$${product.price}）`);
+  };
+
+  useEffect(() => {
+    if (!showScanner) return;
+
+    let mounted = true;
+
+    (async () => {
+      try {
+        const { BrowserMultiFormatReader } = await import("@zxing/browser");
+        const reader = new BrowserMultiFormatReader();
+
+        if (!mounted || !videoRef.current) return;
+
+        const controls = await reader.decodeFromVideoDevice(
+          undefined,
+          videoRef.current,
+          (result: unknown) => {
+            if (!mounted || !result) return;
+            const text = (result as { getText: () => string }).getText();
+            handleScanResultRef.current(text);
+          }
+        );
+
+        scanControlsRef.current = controls as { stop: () => void };
+      } catch {
+        if (mounted) setScanMsg("無法啟動相機，請確認已允許相機權限");
+      }
+    })();
+
+    return () => {
+      mounted = false;
+      scanControlsRef.current?.stop();
+      scanControlsRef.current = null;
+    };
+  }, [showScanner]);
+
+  function openScanner() {
+    setScanMsg(null);
+    lastScanRef.current = { text: "", time: 0 };
+    setShowScanner(true);
+  }
+
+  function closeScanner() {
+    scanControlsRef.current?.stop();
+    scanControlsRef.current = null;
+    setShowScanner(false);
+    setScanMsg(null);
+  }
+  // ────────────────────────────────────────────────────────────
+
   async function handleCheckout() {
     if (cart.length === 0) return;
     setCheckoutLoading(true);
@@ -155,7 +235,14 @@ export default function PosPage() {
             楊雪雪針織小舖
           </span>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={openScanner}
+            className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-white text-sm font-medium px-3 py-1.5 rounded-lg"
+          >
+            <span>📷</span>
+            <span>掃描</span>
+          </button>
           {isAdmin && (
             <Link
               href="/admin/products"
@@ -171,7 +258,7 @@ export default function PosPage() {
       </header>
 
       {/* Category Tabs */}
-      <div className="bg-white border-b px-3 py-2 flex gap-2 overflow-x-auto flex-shrink-0 scrollbar-hide">
+      <div className="bg-white border-b px-3 py-2 flex gap-2 overflow-x-auto flex-shrink-0">
         <button
           onClick={() => setActiveCategory("all")}
           className={`px-3 py-1 rounded-full text-sm whitespace-nowrap transition-colors ${
@@ -224,7 +311,6 @@ export default function PosPage() {
                     : "hover:shadow-md cursor-pointer"
                 } ${inCart ? "ring-2 ring-pink-400" : ""}`}
               >
-                {/* Image */}
                 <div className="aspect-square bg-gray-100 overflow-hidden">
                   {product.image_url ? (
                     <img
@@ -238,8 +324,6 @@ export default function PosPage() {
                     </div>
                   )}
                 </div>
-
-                {/* Info */}
                 <div className="p-2">
                   <div className="text-sm font-medium text-gray-800 line-clamp-2 leading-tight">
                     {product.name}
@@ -262,8 +346,6 @@ export default function PosPage() {
                     )}
                   </div>
                 </div>
-
-                {/* Badges */}
                 {isLow && !isOut && (
                   <div className="absolute top-1 left-1 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full leading-none">
                     低
@@ -311,7 +393,6 @@ export default function PosPage() {
             onClick={() => setShowCart(false)}
           />
           <div className="bg-white rounded-t-2xl max-h-[85vh] flex flex-col">
-            {/* Drawer Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b flex-shrink-0">
               <h2 className="font-bold text-lg">購物車</h2>
               <button
@@ -322,13 +403,9 @@ export default function PosPage() {
               </button>
             </div>
 
-            {/* Cart Items */}
             <div className="flex-1 overflow-y-auto px-5 py-3 space-y-3">
               {cart.map((item) => (
-                <div
-                  key={item.product.id}
-                  className="flex items-center gap-3"
-                >
+                <div key={item.product.id} className="flex items-center gap-3">
                   <div className="w-12 h-12 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
                     {item.product.image_url ? (
                       <img
@@ -342,7 +419,6 @@ export default function PosPage() {
                       </div>
                     )}
                   </div>
-
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium text-gray-800 truncate">
                       {item.product.name}
@@ -351,7 +427,6 @@ export default function PosPage() {
                       ${item.product.price}
                     </div>
                   </div>
-
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <button
                       onClick={() => updateQty(item.product.id, -1)}
@@ -375,7 +450,6 @@ export default function PosPage() {
                       ✕
                     </button>
                   </div>
-
                   <div className="text-right w-16 text-sm font-semibold flex-shrink-0">
                     ${(item.product.price * item.quantity).toLocaleString()}
                   </div>
@@ -383,7 +457,6 @@ export default function PosPage() {
               ))}
             </div>
 
-            {/* Checkout Area */}
             <div className="border-t px-5 pt-4 pb-6 space-y-3 flex-shrink-0">
               <div className="flex items-center justify-between">
                 <span className="font-bold text-lg">總計</span>
@@ -391,14 +464,11 @@ export default function PosPage() {
                   ${cartTotal.toLocaleString()}
                 </span>
               </div>
-
               {errorMsg && (
                 <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm">
                   ❌ {errorMsg}
                 </div>
               )}
-
-              {/* Payment Method */}
               <div className="flex gap-3">
                 <button
                   onClick={() => setPaymentMethod("cash")}
@@ -421,7 +491,6 @@ export default function PosPage() {
                   📱 LinePay
                 </button>
               </div>
-
               <button
                 onClick={handleCheckout}
                 disabled={checkoutLoading}
@@ -430,6 +499,71 @@ export default function PosPage() {
                 {checkoutLoading ? "結帳中..." : "確認結帳"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* QR Scanner Modal */}
+      {showScanner && (
+        <div className="fixed inset-0 z-50 bg-black flex flex-col">
+          {/* Scanner Header */}
+          <div className="flex items-center justify-between px-5 py-4 flex-shrink-0">
+            <div>
+              <h2 className="text-white font-bold text-lg">掃描商品 QR Code</h2>
+              <p className="text-gray-400 text-xs mt-0.5">
+                將 QR Code 對準框框內
+              </p>
+            </div>
+            <button
+              onClick={closeScanner}
+              className="w-9 h-9 rounded-full bg-white bg-opacity-20 flex items-center justify-center text-white text-xl"
+            >
+              ×
+            </button>
+          </div>
+
+          {/* Camera View */}
+          <div className="flex-1 relative overflow-hidden">
+            <video
+              ref={videoRef}
+              className="absolute inset-0 w-full h-full object-cover"
+              autoPlay
+              muted
+              playsInline
+            />
+            {/* Scanning Frame */}
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="relative w-56 h-56">
+                {/* Corner markers */}
+                <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-white rounded-tl-lg" />
+                <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-white rounded-tr-lg" />
+                <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-white rounded-bl-lg" />
+                <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-white rounded-br-lg" />
+                {/* Scan line animation */}
+                <div className="absolute inset-x-0 top-1/2 h-0.5 bg-pink-400 opacity-80 animate-pulse" />
+              </div>
+            </div>
+          </div>
+
+          {/* Status Bar */}
+          <div className="flex-shrink-0 px-5 py-5 min-h-[80px] flex items-center justify-center">
+            {scanMsg ? (
+              <div
+                className={`w-full text-center px-4 py-3 rounded-xl font-medium text-sm ${
+                  scanMsg.startsWith("✅")
+                    ? "bg-green-500 text-white"
+                    : scanMsg.startsWith("❌")
+                    ? "bg-red-500 text-white"
+                    : "bg-white bg-opacity-20 text-white"
+                }`}
+              >
+                {scanMsg}
+              </div>
+            ) : (
+              <p className="text-gray-500 text-sm text-center">
+                等待掃描中...
+              </p>
+            )}
           </div>
         </div>
       )}
