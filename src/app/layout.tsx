@@ -11,6 +11,9 @@ export const metadata: Metadata = {
   title: "楊雪雪針織小舖 POS",
   description: "楊雪雪針織小舖行動收銀系統",
   manifest: "/manifest.json",
+  icons: {
+    apple: [{ url: "/icon-192.png", sizes: "192x192" }],
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
