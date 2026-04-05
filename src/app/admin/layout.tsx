@@ -40,6 +40,12 @@ export default async function AdminLayout({
             </Link>
             <div className="hidden sm:flex items-center gap-3">
               <Link
+                href="/admin/dashboard"
+                className="text-sm text-gray-600 hover:text-pink-500"
+              >
+                報表
+              </Link>
+              <Link
                 href="/admin/products"
                 className="text-sm text-gray-600 hover:text-pink-500"
               >
@@ -72,6 +78,12 @@ export default async function AdminLayout({
         </div>
         {/* Mobile nav */}
         <div className="sm:hidden flex gap-3 mt-2">
+          <Link
+            href="/admin/dashboard"
+            className="text-sm text-gray-600 hover:text-pink-500"
+          >
+            報表
+          </Link>
           <Link
             href="/admin/products"
             className="text-sm text-gray-600 hover:text-pink-500"
