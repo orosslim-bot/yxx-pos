@@ -2,7 +2,8 @@
 
 :root {
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #111111;
+  color-scheme: light; /* 強制瀏覽器不套用深色模式 */
 }
 
 @theme inline {
@@ -12,20 +13,35 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* 覆蓋深色模式，全站維持白底深字 */
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #ffffff;
+    --foreground: #111111;
+    color-scheme: light;
   }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: #ffffff;
+  color: #111111;
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/* 確保所有輸入框在深色模式也清晰可讀 */
+/* 全站預設深色（不加 !important，讓 Tailwind text-white 等可正常覆蓋） */
+* {
+  color: #111111;
+}
+
+/* 強制表格、標籤、標題深色（這些不會有白色文字的場景） */
+table, td, th, tr,
+p, label,
+h1, h2, h3, h4, h5, h6,
+li {
+  color: #111111 !important;
+}
+
+/* 輸入框白底深字 */
 input, textarea, select {
   color: #111111 !important;
   background-color: #ffffff !important;
