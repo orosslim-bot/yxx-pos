@@ -1,8 +1,8 @@
-import { getBooths } from "./actions";
+export const dynamic = 'force-dynamic';
+
 import LoginClient from "./LoginClient";
 
-export default async function LoginPage() {
-  const booths = await getBooths();
+export default function LoginPage() {
   return (
     <div className="w-full max-w-sm px-6">
       <div className="text-center mb-8">
@@ -10,7 +10,7 @@ export default async function LoginPage() {
         <h1 className="text-2xl font-bold text-gray-800">楊雪雪針織小舖</h1>
         <p className="text-gray-500 mt-1 text-sm">行動收銀系統</p>
       </div>
-      <LoginClient booths={booths} />
+      <LoginClient />
     </div>
   );
 }

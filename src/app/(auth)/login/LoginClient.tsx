@@ -1,20 +1,35 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 type Booth = { id: number; name: string };
 
-export default function LoginClient({ booths }: { booths: Booth[] }) {
+export default function LoginClient() {
   const router = useRouter();
   const [mode, setMode] = useState<"booth" | "boss">("booth");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [boothName, setBoothName] = useState<string>(booths[0]?.name ?? "");
+  const [booths, setBooths] = useState<Booth[]>([]);
+  const [boothName, setBoothName] = useState<string>("");
   const [pin, setPin] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase
+      .from("booths")
+      .select("id, name")
+      .order("id")
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          setBooths(data);
+          setBoothName(data[0].name);
+        }
+      });
+  }, []);
 
   async function handleBossLogin(e: React.FormEvent) {
     e.preventDefault();
