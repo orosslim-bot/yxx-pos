@@ -9,13 +9,15 @@ export async function POST(req: NextRequest) {
   }
 
   const supabase = createServiceClient();
-  const { data: booth, error } = await supabase
+  const { data: booths } = await supabase
     .from("booths")
     .select("id, name, pin")
     .eq("name", booth_name)
-    .single();
+    .order("id")
+    .limit(1);
 
-  if (error || !booth) {
+  const booth = booths?.[0];
+  if (!booth) {
     return NextResponse.json({ error: "攤位不存在" }, { status: 401 });
   }
 

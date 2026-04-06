@@ -151,7 +151,7 @@ export default function LoginClient() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-gray-800 hover:bg-gray-700 disabled:bg-gray-400 text-white font-bold py-4 rounded-xl text-lg"
+            className="w-full bg-pink-500 hover:bg-pink-600 disabled:bg-pink-300 text-white font-bold py-4 rounded-xl text-lg"
           >
             {loading ? "登入中..." : "老闆登入"}
           </button>
