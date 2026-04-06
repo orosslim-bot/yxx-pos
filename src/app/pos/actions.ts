@@ -70,3 +70,41 @@ export async function checkout(
 
   return { success: true, orderId: order.id };
 }
+
+export type TodaySaleItem = {
+  product_id: string;
+  product_name: string;
+  quantity: number;
+  unit_price: number;
+};
+
+export async function getTodaySales(boothId: number | null): Promise<TodaySaleItem[]> {
+  const db = createServiceClient();
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  type OrderRow = { booth_id: number | null; order_items: { product_id: string; product_name: string; quantity: number; unit_price: number }[] };
+
+  let query = db
+    .from("orders")
+    .select("booth_id, order_items(product_id, product_name, quantity, unit_price)")
+    .gte("created_at", `${todayStr}T00:00:00Z`);
+
+  if (boothId !== null) {
+    query = (query as typeof query).eq("booth_id", boothId);
+  }
+
+  const { data: orders } = await query;
+  const map: Record<string, TodaySaleItem> = {};
+
+  (orders as OrderRow[] ?? []).forEach((order) => {
+    (order.order_items ?? []).forEach((item) => {
+      if (map[item.product_id]) {
+        map[item.product_id].quantity += item.quantity;
+      } else {
+        map[item.product_id] = { ...item };
+      }
+    });
+  });
+
+  return Object.values(map).sort((a, b) => b.quantity - a.quantity);
+}

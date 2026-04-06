@@ -9,8 +9,8 @@ import {
   deleteProduct,
 } from "@/app/admin/products/actions";
 import { createClient } from "@/lib/supabase/client";
-import QRCode from "qrcode";
 import JSZip from "jszip";
+import { drawLabel, downloadLabel } from "@/lib/label-utils";
 
 type Props = {
   initialProducts: Product[];
@@ -153,82 +153,6 @@ export default function ProductsManager({ initialProducts, categories }: Props) 
 
   const displayImage = imagePreview ?? currentImageUrl;
 
-  async function drawLabel(product: Product): Promise<HTMLCanvasElement> {
-    const canvas = document.createElement("canvas");
-    canvas.width = 400;
-    canvas.height = 240;
-    const ctx = canvas.getContext("2d")!;
-
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, 400, 240);
-
-    // Border
-    ctx.strokeStyle = "#e5e7eb";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(1, 1, 398, 238);
-
-    // QR Code (left side)
-    const sku = product.sku ?? "000000";
-    const qrCanvas = document.createElement("canvas");
-    await QRCode.toCanvas(qrCanvas, sku, { width: 160, margin: 1, color: { dark: "#111111", light: "#ffffff" } });
-    ctx.drawImage(qrCanvas, 20, 40, 160, 160);
-
-    // Divider
-    ctx.strokeStyle = "#e5e7eb";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(195, 20);
-    ctx.lineTo(195, 220);
-    ctx.stroke();
-
-    // Product name (right side)
-    ctx.fillStyle = "#111111";
-    ctx.font = "bold 20px sans-serif";
-    ctx.textBaseline = "top";
-    const name = product.name;
-    const maxW = 185;
-    const x = 205;
-    let y = 30;
-    let line = "";
-    let lineCount = 0;
-    for (const char of name) {
-      const test = line + char;
-      if (ctx.measureText(test).width > maxW && lineCount < 1) {
-        ctx.fillText(line, x, y);
-        line = char;
-        y += 28;
-        lineCount++;
-      } else {
-        line = test;
-      }
-    }
-    if (line) {
-      const displayLine = ctx.measureText(line).width > maxW ? line.slice(0, 10) + "…" : line;
-      ctx.fillText(displayLine, x, y);
-    }
-
-    // Price
-    ctx.font = "bold 38px sans-serif";
-    ctx.fillStyle = "#ec4899";
-    ctx.fillText(`$${product.price}`, x, 130);
-
-    // SKU
-    ctx.font = "14px monospace";
-    ctx.fillStyle = "#6b7280";
-    ctx.fillText(`SKU: ${sku}`, x, 190);
-
-    return canvas;
-  }
-
-  async function downloadLabel(product: Product) {
-    if (!product.sku) { alert("此商品沒有 SKU，無法產生標籤"); return; }
-    const canvas = await drawLabel(product);
-    const link = document.createElement("a");
-    link.href = canvas.toDataURL("image/png");
-    link.download = `label-${product.sku}.png`;
-    link.click();
-  }
-
   async function downloadAllLabels() {
     const productsWithSku = initialProducts.filter((p) => p.sku);
     if (productsWithSku.length === 0) { alert("沒有商品有 SKU"); return; }
@@ -350,26 +274,27 @@ export default function ProductsManager({ initialProducts, categories }: Props) 
                   </div>
 
                   {/* Actions */}
-                  <div className="flex gap-2 mt-3">
+                  <div className="space-y-2 mt-3">
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => openEdit(product)}
+                        className="flex-1 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded-lg"
+                      >
+                        編輯
+                      </button>
+                      <button
+                        onClick={() => handleDelete(product)}
+                        disabled={deletingId === product.id}
+                        className="flex-1 text-sm bg-red-50 hover:bg-red-100 text-red-600 py-2 rounded-lg disabled:opacity-50"
+                      >
+                        {deletingId === product.id ? "刪除中..." : "刪除"}
+                      </button>
+                    </div>
                     <button
-                      onClick={() => openEdit(product)}
-                      className="flex-1 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 py-1.5 rounded-lg"
+                      onClick={() => downloadLabel(product)}
+                      className="w-full text-sm bg-blue-50 hover:bg-blue-100 text-blue-600 py-2 rounded-lg font-medium"
                     >
-                      編輯
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); downloadLabel(product); }}
-                      className="text-xs text-gray-400 hover:text-gray-600 px-1"
-                      title="下載標籤"
-                    >
-                      🏷️
-                    </button>
-                    <button
-                      onClick={() => handleDelete(product)}
-                      disabled={deletingId === product.id}
-                      className="flex-1 text-sm bg-red-50 hover:bg-red-100 text-red-600 py-1.5 rounded-lg disabled:opacity-50"
-                    >
-                      {deletingId === product.id ? "刪除中..." : "刪除"}
+                      🏷️ 下載 QR 標籤
                     </button>
                   </div>
                 </div>
