@@ -39,6 +39,7 @@ export default function ProductsManager({ initialProducts, categories }: Props) 
   const [loading, setLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [batchDownloading, setBatchDownloading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   function openAdd() {
@@ -228,6 +229,27 @@ export default function ProductsManager({ initialProducts, categories }: Props) 
         </div>
       </div>
 
+      {/* Search Bar */}
+      {initialProducts.length > 0 && (
+        <div className="mb-5">
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="🔍 搜尋商品名稱、SKU 或分類..."
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-pink-400 bg-white"
+          />
+          {searchQuery && (
+            <p className="text-xs text-gray-400 mt-1.5 ml-1">
+              找到 {initialProducts.filter(p => {
+                const q = searchQuery.toLowerCase();
+                return p.name.toLowerCase().includes(q) || (p.sku ?? "").toLowerCase().includes(q) || (p.categories?.name ?? "").toLowerCase().includes(q);
+              }).length} 筆結果
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Empty State */}
       {initialProducts.length === 0 ? (
         <div className="text-center py-20 text-gray-400">
@@ -235,9 +257,25 @@ export default function ProductsManager({ initialProducts, categories }: Props) 
           <p className="text-lg">還沒有商品</p>
           <p className="text-sm mt-1">點「新增商品」或到「匯入商品」頁面批次匯入</p>
         </div>
-      ) : (
+      ) : (() => {
+        const filtered = searchQuery.trim()
+          ? initialProducts.filter((p) => {
+              const q = searchQuery.toLowerCase();
+              return (
+                p.name.toLowerCase().includes(q) ||
+                (p.sku ?? "").toLowerCase().includes(q) ||
+                (p.categories?.name ?? "").toLowerCase().includes(q)
+              );
+            })
+          : initialProducts;
+        return filtered.length === 0 ? (
+          <div className="text-center py-16 text-gray-400">
+            <div className="text-4xl mb-2">🔍</div>
+            <p className="text-sm">找不到符合「{searchQuery}」的商品</p>
+          </div>
+        ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {initialProducts.map((product) => {
+          {filtered.map((product) => {
             const isLow =
               product.stock > 0 && product.stock <= product.low_stock_threshold;
             const isOut = product.stock <= 0;
@@ -331,7 +369,8 @@ export default function ProductsManager({ initialProducts, categories }: Props) 
             );
           })}
         </div>
-      )}
+        );
+      })()}
 
       {/* Add/Edit Modal */}
       {showModal && (
