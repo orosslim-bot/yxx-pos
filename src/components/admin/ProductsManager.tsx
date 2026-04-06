@@ -7,8 +7,8 @@ import {
   createProduct,
   updateProduct,
   deleteProduct,
+  uploadProductImage,
 } from "@/app/admin/products/actions";
-import { createClient } from "@/lib/supabase/client";
 import JSZip from "jszip";
 import { drawLabel, downloadLabel } from "@/lib/label-utils";
 
@@ -88,26 +88,17 @@ export default function ProductsManager({ initialProducts, categories }: Props) 
     let imageFilename = editing?.image_filename ?? null;
 
     if (imageFile) {
-      const supabase = createClient();
-      const ext = imageFile.name.split(".").pop();
-      const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from("product-images")
-        .upload(filename, imageFile, { upsert: true });
-
-      if (uploadError) {
-        alert("圖片上傳失敗：" + uploadError.message);
+      try {
+        const formData = new FormData();
+        formData.append("file", imageFile);
+        const result = await uploadProductImage(formData);
+        imageUrl = result.url;
+        imageFilename = result.filename;
+      } catch (err) {
+        alert("圖片上傳失敗：" + (err as Error).message);
         setLoading(false);
         return;
       }
-
-      const { data: urlData } = supabase.storage
-        .from("product-images")
-        .getPublicUrl(filename);
-
-      imageUrl = urlData.publicUrl;
-      imageFilename = filename;
     }
 
     const data = {

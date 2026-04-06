@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { revalidatePath } from "next/cache";
 
 type ProductData = {
@@ -17,14 +17,14 @@ type ProductData = {
 };
 
 export async function createProduct(data: ProductData) {
-  const supabase = await createClient();
+  const supabase = createServiceClient();
   const { error } = await supabase.from("products").insert(data);
   if (error) throw new Error(error.message);
   revalidatePath("/admin/products");
 }
 
 export async function updateProduct(id: string, data: Partial<ProductData>) {
-  const supabase = await createClient();
+  const supabase = createServiceClient();
   const { error } = await supabase
     .from("products")
     .update({ ...data, updated_at: new Date().toISOString() })
@@ -34,8 +34,32 @@ export async function updateProduct(id: string, data: Partial<ProductData>) {
 }
 
 export async function deleteProduct(id: string) {
-  const supabase = await createClient();
+  const supabase = createServiceClient();
   const { error } = await supabase.from("products").delete().eq("id", id);
   if (error) throw new Error(error.message);
   revalidatePath("/admin/products");
+}
+
+export async function uploadProductImage(formData: FormData) {
+  const file = formData.get("file") as File;
+  if (!file) throw new Error("沒有收到檔案");
+
+  const supabase = createServiceClient();
+  const ext = file.name.split(".").pop() ?? "jpg";
+  const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+
+  const arrayBuffer = await file.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+
+  const { error } = await supabase.storage
+    .from("product-images")
+    .upload(filename, buffer, { contentType: file.type, upsert: true });
+
+  if (error) throw new Error(error.message);
+
+  const { data: urlData } = supabase.storage
+    .from("product-images")
+    .getPublicUrl(filename);
+
+  return { url: urlData.publicUrl, filename };
 }

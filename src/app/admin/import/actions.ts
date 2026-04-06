@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { revalidatePath } from "next/cache";
 
 type ImportRow = {
@@ -16,7 +16,7 @@ type ImportRow = {
 };
 
 export async function importProducts(rows: ImportRow[]) {
-  const supabase = await createClient();
+  const supabase = createServiceClient();
 
   const { data: categories } = await supabase
     .from("categories")
