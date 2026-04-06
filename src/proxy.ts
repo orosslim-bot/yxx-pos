@@ -9,13 +9,9 @@ export async function proxy(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() {
-          return request.cookies.getAll()
-        },
+        getAll() { return request.cookies.getAll() },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          )
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
           supabaseResponse = NextResponse.next({ request })
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
@@ -26,18 +22,31 @@ export async function proxy(request: NextRequest) {
   )
 
   const { data: { user } } = await supabase.auth.getUser()
+  const boothSession = request.cookies.get("booth_session")?.value
+  const isAuthenticated = !!user || !!boothSession
+  const pathname = request.nextUrl.pathname
 
-  // 未登入且不在登入頁 → 導向登入頁
-  if (!user && !request.nextUrl.pathname.startsWith('/login')) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/login'
-    return NextResponse.redirect(url)
+  if (pathname.startsWith('/login')) {
+    if (isAuthenticated) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/pos'
+      return NextResponse.redirect(url)
+    }
+    return supabaseResponse
   }
 
-  // 已登入且在登入頁 → 導向 POS
-  if (user && request.nextUrl.pathname.startsWith('/login')) {
+  if (pathname.startsWith('/admin')) {
+    if (!user) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/login'
+      return NextResponse.redirect(url)
+    }
+    return supabaseResponse
+  }
+
+  if (!isAuthenticated) {
     const url = request.nextUrl.clone()
-    url.pathname = '/pos'
+    url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 

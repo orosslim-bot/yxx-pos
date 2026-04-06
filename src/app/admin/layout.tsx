@@ -57,6 +57,7 @@ export default async function AdminLayout({
               >
                 匯入商品
               </Link>
+              <Link href="/admin/linepay" className="text-sm text-gray-600 hover:text-pink-500">LinePay設定</Link>
             </div>
           </div>
           <div className="flex items-center gap-4">
@@ -96,6 +97,7 @@ export default async function AdminLayout({
           >
             匯入商品
           </Link>
+          <Link href="/admin/linepay" className="text-sm text-gray-600 hover:text-pink-500">LinePay設定</Link>
         </div>
       </nav>
       <main className="max-w-6xl mx-auto px-4 py-6">{children}</main>

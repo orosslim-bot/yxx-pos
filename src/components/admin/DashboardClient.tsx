@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   LineChart,
   Line,
@@ -31,6 +32,8 @@ type Props = {
   weekChartData: WeekDataPoint[];
   top5: Top5Item[];
   lowStockProducts: LowStockProduct[];
+  booths: { id: number; name: string }[];
+  currentBoothId: number | null;
 };
 
 function formatMoney(n: number) {
@@ -44,7 +47,10 @@ export default function DashboardClient({
   weekChartData,
   top5,
   lowStockProducts,
+  booths,
+  currentBoothId,
 }: Props) {
+  const router = useRouter();
   const [exporting, setExporting] = useState(false);
 
   async function handleExport() {
@@ -70,6 +76,26 @@ export default function DashboardClient({
 
   return (
     <div className="space-y-6">
+      {/* Booth Filter */}
+      {booths.length > 0 && (
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-gray-600">篩選攤位：</label>
+          <select
+            value={currentBoothId ?? ""}
+            onChange={(e) => {
+              const val = e.target.value;
+              router.push(val ? `/admin/dashboard?booth=${val}` : "/admin/dashboard");
+            }}
+            className="text-sm border border-gray-200 rounded-lg px-3 py-1.5"
+          >
+            <option value="">全部攤位</option>
+            {booths.map((b) => (
+              <option key={b.id} value={b.id}>{b.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-800">報表 Dashboard</h1>
