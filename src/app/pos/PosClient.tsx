@@ -258,32 +258,45 @@ export default function PosClient({
   return (
     <div className="h-dvh flex flex-col bg-gray-50 overflow-hidden">
       {/* Top Bar */}
-      <header className="bg-white border-b px-3 py-2 flex items-center gap-2 flex-shrink-0">
-        <div className="flex items-center gap-1 min-w-0 flex-1">
-          <span className="text-base">🧶</span>
-          <span className="font-bold text-gray-800 text-sm truncate">{displayName}</span>
+      <header className="bg-white border-b flex-shrink-0">
+        <div className="px-3 py-2 flex items-center gap-2">
+          <div className="flex items-center gap-1 min-w-0 flex-1">
+            <span className="text-base">🧶</span>
+            <span className="font-bold text-gray-800 text-sm truncate">{displayName}</span>
+          </div>
+          {/* 桌機版掃描按鈕 */}
+          <button
+            onClick={() => { setScanMsg(null); lastScanRef.current = { text: "", time: 0 }; setShowScanner(true); }}
+            className="hidden sm:flex items-center gap-1 bg-gray-800 active:bg-gray-600 text-white text-sm font-bold px-3 py-2 rounded-lg transition-colors flex-shrink-0"
+          >
+            <span>📷</span><span>掃描</span>
+          </button>
+          <button
+            onClick={openTodaySales}
+            className="text-right flex-shrink-0 bg-pink-50 active:bg-pink-100 px-2 py-1 rounded-lg transition-colors"
+          >
+            <p className="text-xs text-gray-400 leading-none">今日業績 📊</p>
+            <p className="text-xs font-bold text-pink-600">{todayCount}筆/${todayTotal.toLocaleString()}</p>
+          </button>
+          {isAdmin && (
+            <Link href="/admin/dashboard" className="text-xs bg-gray-100 active:bg-gray-200 text-gray-600 px-2 py-1 rounded-lg transition-colors flex-shrink-0">後台</Link>
+          )}
+          {booth && (
+            <form action={boothLogout}>
+              <button type="submit" className="text-xs bg-red-50 active:bg-red-100 text-red-400 px-2 py-1 rounded-lg transition-colors flex-shrink-0">登出</button>
+            </form>
+          )}
         </div>
-        <button
-          onClick={() => { setScanMsg(null); lastScanRef.current = { text: "", time: 0 }; setShowScanner(true); }}
-          className="flex items-center gap-1 bg-gray-800 text-white text-sm font-bold px-3 py-2 rounded-lg flex-shrink-0"
-        >
-          <span>📷</span><span className="hidden sm:inline">掃描</span>
-        </button>
-        <button
-          onClick={openTodaySales}
-          className="text-right flex-shrink-0 active:opacity-70"
-        >
-          <p className="text-xs text-gray-400 leading-none">今日業績 📊</p>
-          <p className="text-xs font-bold text-pink-600">{todayCount}筆/${todayTotal.toLocaleString()}</p>
-        </button>
-        {isAdmin && (
-          <Link href="/admin/dashboard" className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded flex-shrink-0">後台</Link>
-        )}
-        {booth && (
-          <form action={boothLogout}>
-            <button type="submit" className="text-xs text-gray-400 hover:text-red-500 flex-shrink-0">登出</button>
-          </form>
-        )}
+        {/* 手機版：大掃描按鈕，置中 */}
+        <div className="sm:hidden px-3 pb-2.5">
+          <button
+            onClick={() => { setScanMsg(null); lastScanRef.current = { text: "", time: 0 }; setShowScanner(true); }}
+            className="w-full bg-gray-800 active:bg-gray-700 active:scale-[0.98] text-white font-bold py-4 rounded-xl text-base flex items-center justify-center gap-2 transition-all"
+          >
+            <span className="text-xl">📷</span>
+            <span>掃描條碼</span>
+          </button>
+        </div>
       </header>
 
       {/* Scrollable content */}
@@ -306,7 +319,7 @@ export default function PosClient({
               <span className="text-sm font-semibold text-pink-700">
                 購物車（{cart.reduce((s, i) => s + i.quantity, 0)} 件）
               </span>
-              <button onClick={() => setCart([])} className="text-xs text-red-400">清空</button>
+              <button onClick={() => setCart([])} className="text-xs text-red-400 active:text-red-600 transition-colors px-2 py-0.5 rounded active:bg-red-50">清空</button>
             </div>
             <div className="divide-y">
               {cart.map((item) => {
@@ -324,15 +337,15 @@ export default function PosClient({
                         )}
                       </div>
                       <span className="flex-1 text-sm font-medium text-gray-800 truncate">{item.product.name}</span>
-                      <button onClick={() => removeFromCart(item.product.id)} className="text-red-400 text-xl leading-none w-6 text-center flex-shrink-0">×</button>
+                      <button onClick={() => removeFromCart(item.product.id)} className="text-red-400 active:text-red-600 active:scale-90 transition-all text-xl leading-none w-6 text-center flex-shrink-0">×</button>
                     </div>
                     <div className="flex items-center gap-2 pl-11">
-                      <button onClick={() => updateQty(item.product.id, -1)} className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center font-bold text-xl text-gray-700">−</button>
+                      <button onClick={() => updateQty(item.product.id, -1)} className="w-10 h-10 rounded-full bg-gray-100 active:bg-gray-300 active:scale-90 transition-all flex items-center justify-center font-bold text-xl text-gray-700">−</button>
                       <span className="w-8 text-center font-bold text-base">{item.quantity}</span>
-                      <button onClick={() => updateQty(item.product.id, 1)} className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center font-bold text-xl text-gray-700">+</button>
+                      <button onClick={() => updateQty(item.product.id, 1)} className="w-10 h-10 rounded-full bg-gray-100 active:bg-gray-300 active:scale-90 transition-all flex items-center justify-center font-bold text-xl text-gray-700">+</button>
                       <button
                         onClick={() => openPriceEdit(item.product.id, effectivePrice)}
-                        className={`px-2 py-1 rounded-lg text-sm border ${isOverride ? "border-orange-300 bg-orange-50 text-orange-700" : "border-gray-200 text-gray-600"}`}
+                        className={`px-2 py-1 rounded-lg text-sm border active:scale-95 transition-transform ${isOverride ? "border-orange-300 bg-orange-50 text-orange-700" : "border-gray-200 text-gray-600"}`}
                       >
                         ${effectivePrice}{isOverride && " ✏️"}
                       </button>
@@ -362,7 +375,7 @@ export default function PosClient({
             <button
               key={cat.id}
               onClick={() => setActiveCategory(cat.id as number | "all")}
-              className={`px-3 py-1.5 rounded-full text-sm whitespace-nowrap flex-shrink-0 font-medium ${
+              className={`px-3 py-1.5 rounded-full text-sm whitespace-nowrap flex-shrink-0 font-medium active:scale-95 transition-transform ${
                 activeCategory === cat.id ? "bg-pink-500 text-white" : "bg-white text-gray-600 border border-gray-200"
               }`}
             >{cat.name}</button>
@@ -376,33 +389,47 @@ export default function PosClient({
             const isOut = product.stock <= 0;
             const isLow = product.stock > 0 && product.stock <= product.low_stock_threshold;
             return (
-              <button
+              <div
                 key={product.id}
-                onClick={() => addToCart(product)}
-                disabled={isOut}
-                className={`relative bg-white rounded-xl shadow-sm overflow-hidden text-left active:scale-95 transition-transform ${isOut ? "opacity-40 cursor-not-allowed" : ""} ${inCart ? "ring-2 ring-pink-400" : ""}`}
+                className={`relative bg-white rounded-xl shadow-sm overflow-hidden flex flex-col ${isOut ? "opacity-40" : ""} ${inCart ? "ring-2 ring-pink-400" : ""}`}
               >
-                <div className="aspect-square bg-gray-100 overflow-hidden">
-                  {product.image_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-3xl">🧶</div>
-                  )}
-                </div>
-                <div className="p-2">
-                  <div className="text-xs font-medium text-gray-800 line-clamp-2 leading-tight">{product.name}</div>
-                  <div className="text-pink-600 font-bold mt-1 text-sm">${product.price}</div>
-                  <div className="flex items-center justify-between mt-0.5">
-                    <span className={`text-xs ${isLow ? "text-red-500" : "text-gray-400"}`}>庫存{product.stock}</span>
-                    {inCart && (
-                      <span className="bg-pink-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">{inCart.quantity}</span>
+                {/* 加入購物車區域 */}
+                <button
+                  onClick={() => addToCart(product)}
+                  disabled={isOut}
+                  className="flex-1 text-left active:bg-pink-50 active:scale-[0.97] transition-all disabled:cursor-not-allowed"
+                >
+                  <div className="aspect-square bg-gray-100 overflow-hidden">
+                    {product.image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-3xl">🧶</div>
                     )}
                   </div>
-                </div>
+                  <div className="p-2">
+                    <div className="text-xs font-medium text-gray-800 line-clamp-2 leading-tight">{product.name}</div>
+                    <div className="text-pink-600 font-bold mt-1 text-sm">${product.price}</div>
+                    <div className="flex items-center justify-between mt-0.5">
+                      <span className={`text-xs ${isLow ? "text-red-500" : "text-gray-400"}`}>庫存{product.stock}</span>
+                      {inCart && (
+                        <span className="bg-pink-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">{inCart.quantity}</span>
+                      )}
+                    </div>
+                  </div>
+                </button>
+                {/* QR 標籤下載 */}
+                {product.sku && (
+                  <button
+                    onClick={() => downloadLabel(product)}
+                    className="w-full text-xs text-blue-500 active:bg-blue-100 bg-blue-50 py-1.5 font-medium border-t border-blue-100 transition-colors"
+                  >
+                    🏷️ 標籤
+                  </button>
+                )}
                 {isLow && !isOut && <div className="absolute top-1 left-1 bg-red-500 text-white text-xs px-1 py-0.5 rounded-full">低</div>}
                 {isOut && <div className="absolute top-1 left-1 bg-gray-400 text-white text-xs px-1 py-0.5 rounded-full">缺</div>}
-              </button>
+              </div>
             );
           })}
           {filteredProducts.length === 0 && (
@@ -424,12 +451,12 @@ export default function PosClient({
           <button
             onClick={() => doCheckout("cash")}
             disabled={cart.length === 0 || checkoutLoading}
-            className="flex-1 bg-green-500 hover:bg-green-600 disabled:bg-gray-200 disabled:text-gray-400 text-white font-bold py-3.5 rounded-xl text-sm"
+            className="flex-1 bg-green-500 active:bg-green-700 active:scale-[0.97] disabled:bg-gray-200 disabled:text-gray-400 text-white font-bold py-3.5 rounded-xl text-sm transition-all"
           >💵 現金</button>
           <button
             onClick={() => { if (cart.length > 0) setShowLinePayQR(true); }}
             disabled={cart.length === 0 || checkoutLoading}
-            className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-200 disabled:text-gray-400 text-white font-bold py-3.5 rounded-xl text-sm"
+            className="flex-1 bg-emerald-600 active:bg-emerald-800 active:scale-[0.97] disabled:bg-gray-200 disabled:text-gray-400 text-white font-bold py-3.5 rounded-xl text-sm transition-all"
           >📱 LinePay</button>
         </div>
       </div>
