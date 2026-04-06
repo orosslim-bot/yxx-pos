@@ -73,6 +73,43 @@ export default function ProductsManager({ initialProducts, categories }: Props) 
     setEditing(null);
   }
 
+  async function compressImage(file: File): Promise<File> {
+    const MAX_PX = 1200;   // 最長邊上限（px）
+    const QUALITY = 0.82;  // JPEG 品質（0~1）
+
+    return new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        let { width, height } = img;
+        if (width > MAX_PX || height > MAX_PX) {
+          if (width >= height) {
+            height = Math.round((height / width) * MAX_PX);
+            width = MAX_PX;
+          } else {
+            width = Math.round((width / height) * MAX_PX);
+            height = MAX_PX;
+          }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d")!.drawImage(img, 0, 0, width, height);
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) { resolve(file); return; }
+            resolve(new File([blob], file.name.replace(/\.\w+$/, ".jpg"), { type: "image/jpeg" }));
+          },
+          "image/jpeg",
+          QUALITY
+        );
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+      img.src = url;
+    });
+  }
+
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -89,8 +126,9 @@ export default function ProductsManager({ initialProducts, categories }: Props) 
 
     if (imageFile) {
       try {
+        const compressed = await compressImage(imageFile);
         const formData = new FormData();
-        formData.append("file", imageFile);
+        formData.append("file", compressed);
         const result = await uploadProductImage(formData);
         imageUrl = result.url;
         imageFilename = result.filename;
