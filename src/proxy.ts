@@ -26,6 +26,11 @@ export async function proxy(request: NextRequest) {
   const isAuthenticated = !!user || !!boothSession
   const pathname = request.nextUrl.pathname
 
+  // 登入相關 API 不需要攔截
+  if (pathname.startsWith('/api/')) {
+    return supabaseResponse
+  }
+
   if (pathname.startsWith('/login')) {
     if (isAuthenticated) {
       const url = request.nextUrl.clone()
