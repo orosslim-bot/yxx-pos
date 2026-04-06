@@ -22,7 +22,7 @@ export async function proxy(request: NextRequest) {
   )
 
   const { data: { user } } = await supabase.auth.getUser()
-  const boothSession = request.cookies.get("booth_session")?.value
+  const boothSession = request.cookies.get("booth_id")?.value
   const isAuthenticated = !!user || !!boothSession
   const pathname = request.nextUrl.pathname
 

@@ -7,10 +7,12 @@ import { Product } from "@/lib/types";
 
 export default async function PosPage() {
   const cookieStore = await cookies();
-  const boothStr = cookieStore.get("booth_session")?.value;
-  const booth = boothStr
-    ? (JSON.parse(boothStr) as { id: number; name: string })
-    : null;
+  const boothIdStr = cookieStore.get("booth_id")?.value;
+  const boothNameStr = cookieStore.get("booth_name")?.value;
+  const booth =
+    boothIdStr && boothNameStr
+      ? { id: Number(boothIdStr), name: boothNameStr }
+      : null;
 
   const supabase = await createClient();
   const {

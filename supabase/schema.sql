@@ -34,11 +34,20 @@ CREATE TABLE profiles (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE booths (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  pin TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+INSERT INTO booths (name, pin) VALUES ('攤位A', '0001'), ('攤位B', '0002');
+
 CREATE TABLE orders (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   total INTEGER NOT NULL,
   payment_method TEXT NOT NULL,
   cashier_id UUID REFERENCES profiles(id),
+  booth_id INTEGER REFERENCES booths(id),
   note TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );

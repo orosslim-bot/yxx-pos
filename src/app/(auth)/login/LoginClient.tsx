@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { boothLogin } from "./actions";
 
 type Booth = { id: number; name: string };
 
@@ -12,7 +11,7 @@ export default function LoginClient({ booths }: { booths: Booth[] }) {
   const [mode, setMode] = useState<"booth" | "boss">("booth");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [boothId, setBoothId] = useState<number>(booths[0]?.id ?? 0);
+  const [boothName, setBoothName] = useState<string>(booths[0]?.name ?? "");
   const [pin, setPin] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,9 +36,14 @@ export default function LoginClient({ booths }: { booths: Booth[] }) {
     if (pin.length !== 4) { setError("請輸入 4 位 PIN 碼"); return; }
     setLoading(true);
     setError(null);
-    const result = await boothLogin(boothId, pin);
-    if (result.error) {
-      setError(result.error);
+    const res = await fetch("/api/booth-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ booth_name: boothName, pin }),
+    });
+    const result = await res.json();
+    if (!res.ok || result.error) {
+      setError(result.error ?? "登入失敗");
       setLoading(false);
     } else {
       router.push("/pos");
@@ -73,12 +77,12 @@ export default function LoginClient({ booths }: { booths: Booth[] }) {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">選擇攤位</label>
             <select
-              value={boothId}
-              onChange={(e) => setBoothId(Number(e.target.value))}
+              value={boothName}
+              onChange={(e) => setBoothName(e.target.value)}
               className="w-full px-4 py-4 text-lg border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-400"
             >
               {booths.map((b) => (
-                <option key={b.id} value={b.id}>{b.name}</option>
+                <option key={b.id} value={b.name}>{b.name}</option>
               ))}
             </select>
           </div>
