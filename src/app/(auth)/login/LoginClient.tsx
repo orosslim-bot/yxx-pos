@@ -1,13 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 type Booth = { id: number; name: string };
 
 export default function LoginClient() {
-  const router = useRouter();
   const [mode, setMode] = useState<"booth" | "boss">("booth");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -41,8 +39,8 @@ export default function LoginClient() {
       setError("帳號或密碼錯誤");
       setLoading(false);
     } else {
-      router.push("/pos");
-      router.refresh();
+      // 讓 Supabase SSR cookie 寫入後再跳頁
+      window.location.href = "/pos";
     }
   }
 
@@ -61,8 +59,7 @@ export default function LoginClient() {
       setError(result.error ?? "登入失敗");
       setLoading(false);
     } else {
-      router.push("/pos");
-      router.refresh();
+      window.location.href = "/pos";
     }
   }
 
