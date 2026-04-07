@@ -75,9 +75,11 @@ export default function PosClient({
 
   const [showScanner, setShowScanner] = useState(false);
   const [scanMsg, setScanMsg] = useState<string | null>(null);
+  const [pendingScan, setPendingScan] = useState<{ product: Product } | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const scanControlsRef = useRef<{ stop: () => void } | null>(null);
   const lastScanRef = useRef({ text: "", time: 0 });
+  const scanPausedRef = useRef(false);
   const handleScanResultRef = useRef<(text: string) => void>(() => {});
 
   // 購物車自動收合邏輯
@@ -193,16 +195,32 @@ export default function PosClient({
   }
 
   handleScanResultRef.current = (text: string) => {
+    if (scanPausedRef.current) return; // 等待確認中，忽略新掃描
     const now = Date.now();
     const sku = text.trim();
-    if (sku === lastScanRef.current.text && now - lastScanRef.current.time < 2500) return;
+    if (sku === lastScanRef.current.text && now - lastScanRef.current.time < 1500) return;
     lastScanRef.current = { text: sku, time: now };
     const product = products.find((p) => p.sku === sku);
-    if (!product) { setScanMsg(`？ 找不到 SKU：${sku}`); return; }
-    if (product.stock <= 0) { setScanMsg(`✗「${product.name}」庫存不足`); return; }
-    addToCart(product);
-    setScanMsg(`✓ 已加入：${product.name}（$${product.price}）`);
+    if (!product) { setScanMsg(`找不到 SKU：${sku}`); return; }
+    if (product.stock <= 0) { setScanMsg(`「${product.name}」庫存不足`); return; }
+    // 暫停掃描，等待使用者確認
+    scanPausedRef.current = true;
+    setScanMsg(null);
+    setPendingScan({ product });
   };
+
+  function confirmScan() {
+    if (pendingScan) addToCart(pendingScan.product);
+    setPendingScan(null);
+    scanPausedRef.current = false;
+    lastScanRef.current = { text: "", time: 0 };
+  }
+
+  function cancelScan() {
+    setPendingScan(null);
+    scanPausedRef.current = false;
+    lastScanRef.current = { text: "", time: 0 };
+  }
 
   useEffect(() => {
     if (!showScanner) return;
@@ -292,6 +310,8 @@ export default function PosClient({
     scanControlsRef.current = null;
     setShowScanner(false);
     setScanMsg(null);
+    setPendingScan(null);
+    scanPausedRef.current = false;
   };
 
   const isDisabled = cart.length === 0 || !!checkoutLoading;
@@ -873,7 +893,7 @@ export default function PosClient({
           <div className="flex items-center justify-between px-5 py-4 flex-shrink-0">
             <div>
               <div className="font-bold text-lg" style={{ color: "#fff", ...NOTO }}>掃描商品條碼</div>
-              <div className="text-xs mt-0.5" style={{ color: "#9ca3af", ...NOTO }}>將 QR Code 對準框框內</div>
+              <div className="text-xs mt-0.5" style={{ color: "#9ca3af", ...NOTO }}>將條形碼對準框框內</div>
             </div>
             <button
               onClick={scanClose}
@@ -900,21 +920,40 @@ export default function PosClient({
             </div>
           </div>
 
-          <div className="flex-shrink-0 px-5 py-5 min-h-[80px] flex items-center justify-center">
-            {scanMsg ? (
+          <div className="flex-shrink-0 px-5 py-4">
+            {pendingScan ? (
+              /* 確認列：掃描成功，等待使用者確認 */
               <div
-                className="w-full text-center px-4 py-3 font-medium text-sm"
-                style={{
-                  background: scanMsg.startsWith("✓") ? "rgba(255,255,255,0.2)" :
-                               scanMsg.startsWith("✗") ? "#C0392B" :
-                               "rgba(255,255,255,0.15)",
-                  color: "#fff",
-                  borderRadius: 2,
-                  ...NOTO,
-                }}
+                className="w-full px-4 py-3"
+                style={{ background: "rgba(255,255,255,0.12)", borderRadius: 4, border: "1px solid rgba(255,255,255,0.25)" }}
+              >
+                <div className="text-sm font-medium mb-1" style={{ color: "#fff", ...NOTO }}>
+                  {pendingScan.product.name}
+                </div>
+                <div className="text-xs mb-3" style={{ color: "#9ca3af", ...NOTO }}>
+                  定價 ${pendingScan.product.price}
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={cancelScan}
+                    className="flex-1 py-2.5 text-sm font-medium active:opacity-60 transition-opacity"
+                    style={{ background: "rgba(255,255,255,0.1)", color: "#9ca3af", borderRadius: 2, border: "1px solid rgba(255,255,255,0.15)", ...NOTO }}
+                  >取消</button>
+                  <button
+                    onClick={confirmScan}
+                    className="flex-[2] py-2.5 text-sm font-bold active:opacity-80 transition-opacity"
+                    style={{ background: "#fff", color: "#111", borderRadius: 2, ...NOTO }}
+                  >確認加入購物車</button>
+                </div>
+              </div>
+            ) : scanMsg ? (
+              /* 錯誤訊息 */
+              <div
+                className="w-full text-center px-4 py-3 text-sm font-medium"
+                style={{ background: "#C0392B", color: "#fff", borderRadius: 2, ...NOTO }}
               >{scanMsg}</div>
             ) : (
-              <div className="text-sm text-center" style={{ color: "#6b7280", ...NOTO }}>等待掃描中...</div>
+              <div className="text-sm text-center py-3" style={{ color: "#6b7280", ...NOTO }}>等待掃描中...</div>
             )}
           </div>
         </div>

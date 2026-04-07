@@ -254,10 +254,19 @@ export default function ProductsManager({ initialProducts, categories }: Props) 
         { width: 20 },
       ];
 
+      // 標題列
+      ws.addRow(["品名", "定價", "SKU"]);
+
       for (const p of targets) {
         const sku = p.sku || generateSku();
         ws.addRow([p.name, p.price, sku]);
       }
+
+      // 檔名加今日 MMDD（例如 0407）
+      const now = new Date();
+      const mmdd =
+        String(now.getMonth() + 1).padStart(2, "0") +
+        String(now.getDate()).padStart(2, "0");
 
       const buffer = await wb.xlsx.writeBuffer();
       const blob = new Blob([buffer], {
@@ -266,7 +275,7 @@ export default function ProductsManager({ initialProducts, categories }: Props) 
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = "YXX-labels.xlsx";
+      link.download = `YXX-labels-${mmdd}.xlsx`;
       link.click();
       URL.revokeObjectURL(url);
     } finally {
