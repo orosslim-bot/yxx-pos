@@ -248,10 +248,12 @@ export default function PosClient({
               Html5QrcodeSupportedFormats.CODE_128,
               Html5QrcodeSupportedFormats.EAN_13,
             ],
+            // facingMode 必須放在 videoConstraints 內，否則 html5-qrcode 會忽略第一個參數
+            // 移除 advanced focusMode，iOS Safari 不支援會導致 getUserMedia 失敗
             videoConstraints: {
+              facingMode: { ideal: "environment" },
               width: { ideal: 1280 },
               height: { ideal: 720 },
-              advanced: [{ focusMode: "continuous" }],
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             } as any,
           },
