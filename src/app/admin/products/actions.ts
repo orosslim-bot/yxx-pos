@@ -3,6 +3,7 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { revalidatePath } from "next/cache";
 import { generateUniqueSku } from "@/lib/sku-server";
+import { requireAdmin } from "@/lib/require-admin";
 
 type ProductData = {
   sku?: string | null;
@@ -18,6 +19,7 @@ type ProductData = {
 };
 
 export async function createProduct(data: ProductData) {
+  await requireAdmin();
   const supabase = createServiceClient();
   const sku = data.sku || await generateUniqueSku();
   const { error } = await supabase.from("products").insert({ ...data, sku });
@@ -26,6 +28,7 @@ export async function createProduct(data: ProductData) {
 }
 
 export async function updateProduct(id: string, data: Partial<ProductData>) {
+  await requireAdmin();
   const supabase = createServiceClient();
   const { error } = await supabase
     .from("products")
@@ -36,6 +39,7 @@ export async function updateProduct(id: string, data: Partial<ProductData>) {
 }
 
 export async function deleteProduct(id: string) {
+  await requireAdmin();
   const supabase = createServiceClient();
   const { error } = await supabase.from("products").delete().eq("id", id);
   if (error) throw new Error(error.message);
@@ -43,6 +47,7 @@ export async function deleteProduct(id: string) {
 }
 
 export async function bulkDeleteProducts(ids: string[]) {
+  await requireAdmin();
   if (ids.length === 0) return;
   const supabase = createServiceClient();
   const { error } = await supabase.from("products").delete().in("id", ids);
@@ -51,6 +56,7 @@ export async function bulkDeleteProducts(ids: string[]) {
 }
 
 export async function duplicateProduct(id: string) {
+  await requireAdmin();
   const supabase = createServiceClient();
   const { data, error: fetchError } = await supabase
     .from("products")
@@ -76,6 +82,7 @@ export async function duplicateProduct(id: string) {
  * 供前端下載標籤前呼叫，確保 DB ↔ 標籤 SKU 永遠一致。
  */
 export async function ensureSku(productId: string): Promise<string> {
+  await requireAdmin();
   const supabase = createServiceClient();
   const { data } = await supabase
     .from("products")
@@ -95,6 +102,7 @@ export async function ensureSku(productId: string): Promise<string> {
 }
 
 export async function uploadProductImage(formData: FormData) {
+  await requireAdmin();
   const file = formData.get("file") as File;
   if (!file) throw new Error("沒有收到檔案");
 

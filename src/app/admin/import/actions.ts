@@ -3,6 +3,7 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { revalidatePath } from "next/cache";
 import { generateUniqueSku } from "@/lib/sku-server";
+import { requireAdmin } from "@/lib/require-admin";
 
 type ImportRow = {
   sku: string;
@@ -17,6 +18,7 @@ type ImportRow = {
 };
 
 export async function importProducts(rows: ImportRow[]) {
+  await requireAdmin();
   const supabase = createServiceClient();
 
   const { data: categories } = await supabase

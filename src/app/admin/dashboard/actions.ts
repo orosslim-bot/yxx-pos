@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { requireAdmin } from "@/lib/require-admin";
 
 type OrderItem = {
   product_name: string;
@@ -17,6 +18,7 @@ type Order = {
 };
 
 export async function exportMonthlyOrdersCsv(): Promise<string> {
+  await requireAdmin();
   const supabase = await createClient();
 
   const now = new Date();
