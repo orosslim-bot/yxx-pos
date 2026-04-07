@@ -12,7 +12,7 @@ INSERT INTO categories (name) VALUES
 
 CREATE TABLE products (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  sku TEXT,
+  sku TEXT UNIQUE,
   name TEXT NOT NULL,
   category_id INTEGER REFERENCES categories(id),
   price INTEGER DEFAULT 0,

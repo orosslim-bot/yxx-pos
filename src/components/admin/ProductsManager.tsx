@@ -10,9 +10,10 @@ import {
   uploadProductImage,
   bulkDeleteProducts,
   duplicateProduct,
+  ensureSku,
 } from "@/app/admin/products/actions";
 import ExcelJS from "exceljs";
-import { downloadLabel, generateSku } from "@/lib/label-utils";
+import { downloadLabel } from "@/lib/label-utils";
 
 type Props = {
   initialProducts: Product[];
@@ -235,20 +236,15 @@ export default function ProductsManager({ initialProducts, categories }: Props) 
 
   const displayImage = imagePreview ?? currentImageUrl;
 
-  // 下載單品標籤：若 SKU 為 null，先存 DB 再下載，確保標籤 SKU 與資料庫一致
+  // 下載單品標籤：透過 ensureSku 確保 SKU 已在 DB，再下載標籤
   async function handleDownloadLabel(product: Product) {
-    let sku = product.sku;
-    if (!sku) {
-      sku = generateSku();
-      try {
-        await updateProduct(product.id, { sku });
-        router.refresh();
-      } catch (err) {
-        alert("SKU 儲存失敗：" + (err as Error).message);
-        return;
-      }
+    try {
+      const sku = await ensureSku(product.id);
+      if (product.sku !== sku) router.refresh(); // 有新生成 SKU 才刷新
+      await downloadLabel({ ...product, sku });
+    } catch (err) {
+      alert("標籤下載失敗：" + (err as Error).message);
     }
-    await downloadLabel({ ...product, sku });
   }
 
   async function downloadAllLabels() {
@@ -273,14 +269,15 @@ export default function ProductsManager({ initialProducts, categories }: Props) 
       // 標題列
       ws.addRow(["品名", "定價", "SKU"]);
 
-      // 先批量補齊沒有 SKU 的商品，確保 Excel 的 SKU 與 DB 一致
-      const needsSku = targets.filter((p) => !p.sku);
-      for (const p of needsSku) {
-        const sku = generateSku();
-        await updateProduct(p.id, { sku });
-        p.sku = sku; // 更新本地引用
+      // 先批量補齊沒有 SKU 的商品（透過 ensureSku 查重後存 DB）
+      let skuUpdated = false;
+      for (const p of targets) {
+        if (!p.sku) {
+          p.sku = await ensureSku(p.id);
+          skuUpdated = true;
+        }
       }
-      if (needsSku.length > 0) router.refresh();
+      if (skuUpdated) router.refresh();
 
       for (const p of targets) {
         ws.addRow([p.name, p.price, p.sku!]);

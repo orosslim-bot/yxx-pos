@@ -2,10 +2,7 @@
 
 import { createServiceClient } from "@/lib/supabase/service";
 import { revalidatePath } from "next/cache";
-
-function generateSku(): string {
-  return Math.floor(10000000 + Math.random() * 90000000).toString();
-}
+import { generateUniqueSku } from "@/lib/sku-server";
 
 type ImportRow = {
   sku: string;
@@ -29,10 +26,10 @@ export async function importProducts(rows: ImportRow[]) {
     categories?.map((c) => [c.name, c.id]) ?? []
   );
 
-  const products = rows
-    .filter((r) => r.name.trim())
-    .map((r) => ({
-      sku: r.sku || generateSku(),
+  const products = [];
+  for (const r of rows.filter((r) => r.name.trim())) {
+    products.push({
+      sku: r.sku || await generateUniqueSku(),
       name: r.name.trim(),
       category_id: categoryMap.get(r.category) ?? null,
       price: Number(r.price) || 0,
@@ -41,7 +38,8 @@ export async function importProducts(rows: ImportRow[]) {
       low_stock_threshold: Number(r.low_stock_threshold) || 1,
       image_filename: r.image_filename || null,
       note: r.note || null,
-    }));
+    });
+  }
 
   if (products.length === 0) throw new Error("沒有有效的商品資料（品名不能為空）");
 
