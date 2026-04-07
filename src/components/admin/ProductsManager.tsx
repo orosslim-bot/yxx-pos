@@ -11,7 +11,8 @@ import {
   bulkDeleteProducts,
   duplicateProduct,
 } from "@/app/admin/products/actions";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
+import JsBarcode from "jsbarcode";
 import { downloadLabel, generateSku } from "@/lib/label-utils";
 
 type Props = {
@@ -235,19 +236,70 @@ export default function ProductsManager({ initialProducts, categories }: Props) 
 
   const displayImage = imagePreview ?? currentImageUrl;
 
+  // 產生條形碼 base64（在 canvas 上繪製）
+  function generateBarcodeBase64(sku: string): string {
+    const c = document.createElement("canvas");
+    JsBarcode(c, sku, {
+      format: "CODE128",
+      displayValue: false,
+      width: 2,
+      height: 60,
+      margin: 4,
+      lineColor: "#000000",
+      background: "#FFFFFF",
+    });
+    return c.toDataURL("image/png").split(",")[1];
+  }
+
   async function downloadAllLabels() {
-    if (initialProducts.length === 0) { alert("沒有商品"); return; }
+    // 有勾選則只下載勾選商品，否則下載全部
+    const targets =
+      selectedIds.size > 0
+        ? initialProducts.filter((p) => selectedIds.has(p.id))
+        : initialProducts;
+
+    if (targets.length === 0) { alert("沒有可下載的商品"); return; }
     setBatchDownloading(true);
+
     try {
-      const rows = initialProducts.map((p) => [
-        p.name,
-        p.price,
-        p.sku || generateSku(),
-      ]);
-      const ws = XLSX.utils.aoa_to_sheet(rows);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Labels");
-      XLSX.writeFile(wb, "YXX-labels.xlsx");
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet("Labels");
+
+      // 欄位寬度：A 品名、B 價格、C 條形碼
+      ws.columns = [
+        { width: 32 },
+        { width: 10 },
+        { width: 26 },
+      ];
+
+      for (let i = 0; i < targets.length; i++) {
+        const p = targets[i];
+        const sku = p.sku || generateSku();
+
+        // A: 品名  B: 價格  C: 留空（放圖片）
+        const row = ws.addRow([p.name, p.price, ""]);
+        row.height = 50; // ~67px 容納條形碼
+
+        // 生成條形碼並嵌入 C 欄
+        const base64 = generateBarcodeBase64(sku);
+        const imageId = wb.addImage({ base64, extension: "png" });
+        ws.addImage(imageId, {
+          tl: { col: 2, row: i },       // C 欄（0-indexed col=2）
+          ext: { width: 160, height: 46 },
+          editAs: "oneCell",
+        });
+      }
+
+      const buffer = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "YXX-labels.xlsx";
+      link.click();
+      URL.revokeObjectURL(url);
     } finally {
       setBatchDownloading(false);
     }
@@ -278,7 +330,11 @@ export default function ProductsManager({ initialProducts, categories }: Props) 
             disabled={batchDownloading}
             className="flex items-center gap-1.5 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-gray-700 text-sm font-medium px-3 py-2 rounded-lg"
           >
-            {batchDownloading ? "產生中..." : "📥 匯出標籤 Excel"}
+            {batchDownloading
+              ? "產生中..."
+              : selectedIds.size > 0
+              ? `📥 匯出已選 ${selectedIds.size} 件`
+              : "📥 匯出全部標籤"}
           </button>
           <button
             onClick={openAdd}
