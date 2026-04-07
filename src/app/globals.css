@@ -41,10 +41,9 @@ li {
   color: #111111 !important;
 }
 
-/* 輸入框白底深字 */
+/* 輸入框深字（background 讓元件自訂，不強制白底） */
 input, textarea, select {
   color: #111111 !important;
-  background-color: #ffffff !important;
 }
 
 input::placeholder, textarea::placeholder {
