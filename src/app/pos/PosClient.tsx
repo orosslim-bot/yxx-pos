@@ -416,15 +416,16 @@ export default function PosClient({
         </div>
       </div>
 
-      {/* ═══ 捲動區域：購物車 + 商品 ═══ */}
-      <div className="flex-1 overflow-y-auto">
-
-        {/* 購物車 */}
-        {cart.length > 0 && (
-          <div
-            className="mx-3 mt-3 rounded-lg overflow-hidden"
-            style={{ background: C.card, border: `1px solid ${C.border}` }}
-          >
+      {/* ═══ 購物車（固定區，不捲動） ═══ */}
+      {cart.length > 0 && (
+        <div
+          className="flex-shrink-0 mx-3 mt-2 mb-0 rounded-lg overflow-hidden overflow-y-auto"
+          style={{
+            background: C.card,
+            border: `1px solid ${C.border}`,
+            maxHeight: "42vh",
+          }}
+        >
             {/* 購物車標題 */}
             <div
               className="px-4 py-2.5 flex items-center"
@@ -507,9 +508,11 @@ export default function PosClient({
                 );
               })}
             </div>
-          </div>
-        )}
+        </div>
+      )}
 
+      {/* ═══ 捲動區域：只有商品格 ═══ */}
+      <div className="flex-1 overflow-y-auto">
         {/* 商品格 */}
         <div className="px-3 pb-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 mt-3">
           {filteredProducts.map((product) => {
