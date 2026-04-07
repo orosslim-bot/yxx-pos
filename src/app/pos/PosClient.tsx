@@ -76,7 +76,6 @@ export default function PosClient({
   const [showScanner, setShowScanner] = useState(false);
   const [scanMsg, setScanMsg] = useState<string | null>(null);
   const [pendingScan, setPendingScan] = useState<{ product: Product } | null>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
   const scanControlsRef = useRef<{ stop: () => void } | null>(null);
   const lastScanRef = useRef({ text: "", time: 0 });
   const scanPausedRef = useRef(false);
@@ -225,24 +224,48 @@ export default function PosClient({
   useEffect(() => {
     if (!showScanner) return;
     let mounted = true;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let scanner: any = null;
+
     (async () => {
       try {
-        const { BrowserMultiFormatReader } = await import("@zxing/browser");
-        const reader = new BrowserMultiFormatReader();
-        if (!mounted || !videoRef.current) return;
-        const controls = await reader.decodeFromVideoDevice(
-          undefined, videoRef.current,
-          (result: unknown) => {
-            if (!mounted || !result) return;
-            const text = (result as { getText: () => string }).getText();
-            handleScanResultRef.current(text);
-          }
+        const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import("html5-qrcode");
+        if (!mounted) return;
+
+        scanner = new Html5Qrcode("html5-qrcode-region");
+        scanControlsRef.current = {
+          stop: () => {
+            scanner?.stop().then(() => scanner?.clear()).catch(() => {});
+          },
+        };
+
+        await scanner.start(
+          { facingMode: "environment" },
+          {
+            fps: 10,
+            qrbox: { width: 250, height: 150 },
+            formatsToSupport: [
+              Html5QrcodeSupportedFormats.CODE_128,
+              Html5QrcodeSupportedFormats.EAN_13,
+            ],
+            videoConstraints: {
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+              advanced: [{ focusMode: "continuous" }],
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            } as any,
+          },
+          (decodedText: string) => {
+            if (!mounted) return;
+            handleScanResultRef.current(decodedText);
+          },
+          () => {} // 掃描 miss，忽略
         );
-        scanControlsRef.current = controls as { stop: () => void };
       } catch {
         if (mounted) setScanMsg("無法啟動相機，請確認已允許相機權限");
       }
     })();
+
     return () => {
       mounted = false;
       scanControlsRef.current?.stop();
@@ -887,35 +910,55 @@ export default function PosClient({
         </div>
       )}
 
-      {/* ═══ QR 掃描器 ═══ */}
+      {/* ═══ 條碼掃描器 ═══ */}
       {showScanner && (
-        <div className="fixed inset-0 z-50 bg-black flex flex-col">
+        <div className="fixed inset-0 z-50 flex flex-col" style={{ background: "rgba(15,15,15,0.97)" }}>
+          {/* 隱藏 html5-qrcode 原生 UI */}
+          <style>{`
+            #html5-qrcode-region video {
+              width: 100% !important; height: 100% !important;
+              object-fit: cover !important;
+              position: absolute !important; top: 0 !important; left: 0 !important;
+            }
+            #html5-qrcode-region__scan_region { width: 100% !important; height: 100% !important; }
+            #html5-qrcode-region__dashboard { display: none !important; }
+            .qr-shaded-region { display: none !important; }
+          `}</style>
+
           <div className="flex items-center justify-between px-5 py-4 flex-shrink-0">
             <div>
               <div className="font-bold text-lg" style={{ color: "#fff", ...NOTO }}>掃描商品條碼</div>
-              <div className="text-xs mt-0.5" style={{ color: "#9ca3af", ...NOTO }}>將條形碼對準框框內</div>
+              <div className="text-xs mt-0.5" style={{ color: "#6b7280", ...NOTO }}>將條形碼對準框框內</div>
             </div>
             <button
               onClick={scanClose}
               className="w-11 h-11 rounded-full flex items-center justify-center text-white text-xl active:opacity-60 transition-opacity"
-              style={{ background: "rgba(255,255,255,0.15)" }}
+              style={{ background: "rgba(255,255,255,0.12)" }}
             >×</button>
           </div>
 
           <div className="flex-1 relative overflow-hidden">
-            <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover" autoPlay muted playsInline />
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="relative w-56 h-56">
-                {/* 掃描框角落 */}
-                <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4" style={{ borderColor: "#FFFFFF" }} />
-                <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4" style={{ borderColor: "#FFFFFF" }} />
-                <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4" style={{ borderColor: "#FFFFFF" }} />
-                <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4" style={{ borderColor: "#FFFFFF" }} />
-                {/* 掃描線 */}
-                <div
-                  className="absolute inset-x-0 top-1/2 h-0.5 opacity-80 animate-pulse"
-                  style={{ background: "#FFFFFF" }}
-                />
+            {/* html5-qrcode 容器 */}
+            <div id="html5-qrcode-region" className="absolute inset-0" />
+
+            {/* MUJI overlay：遮罩 + 角落定位框 */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div
+                className="relative"
+                style={{
+                  width: 250,
+                  height: 150,
+                  // box-shadow 向外擴散模擬四周遮罩
+                  boxShadow: "0 0 0 9999px rgba(0,0,0,0.52)",
+                }}
+              >
+                {/* 四個角落，白色極細線 */}
+                <div className="absolute top-0 left-0 w-5 h-5 border-t border-l" style={{ borderColor: "#ffffff" }} />
+                <div className="absolute top-0 right-0 w-5 h-5 border-t border-r" style={{ borderColor: "#ffffff" }} />
+                <div className="absolute bottom-0 left-0 w-5 h-5 border-b border-l" style={{ borderColor: "#ffffff" }} />
+                <div className="absolute bottom-0 right-0 w-5 h-5 border-b border-r" style={{ borderColor: "#ffffff" }} />
+                {/* 靜態定位線，極細灰色，無動畫 */}
+                <div className="absolute inset-x-0" style={{ top: "50%", height: 1, background: "#333333" }} />
               </div>
             </div>
           </div>
