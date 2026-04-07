@@ -235,6 +235,22 @@ export default function ProductsManager({ initialProducts, categories }: Props) 
 
   const displayImage = imagePreview ?? currentImageUrl;
 
+  // 下載單品標籤：若 SKU 為 null，先存 DB 再下載，確保標籤 SKU 與資料庫一致
+  async function handleDownloadLabel(product: Product) {
+    let sku = product.sku;
+    if (!sku) {
+      sku = generateSku();
+      try {
+        await updateProduct(product.id, { sku });
+        router.refresh();
+      } catch (err) {
+        alert("SKU 儲存失敗：" + (err as Error).message);
+        return;
+      }
+    }
+    await downloadLabel({ ...product, sku });
+  }
+
   async function downloadAllLabels() {
     // 有勾選則只下載勾選商品，否則下載全部
     const targets =
@@ -257,9 +273,17 @@ export default function ProductsManager({ initialProducts, categories }: Props) 
       // 標題列
       ws.addRow(["品名", "定價", "SKU"]);
 
+      // 先批量補齊沒有 SKU 的商品，確保 Excel 的 SKU 與 DB 一致
+      const needsSku = targets.filter((p) => !p.sku);
+      for (const p of needsSku) {
+        const sku = generateSku();
+        await updateProduct(p.id, { sku });
+        p.sku = sku; // 更新本地引用
+      }
+      if (needsSku.length > 0) router.refresh();
+
       for (const p of targets) {
-        const sku = p.sku || generateSku();
-        ws.addRow([p.name, p.price, sku]);
+        ws.addRow([p.name, p.price, p.sku!]);
       }
 
       // 檔名加今日 MMDD（例如 0407）
@@ -489,7 +513,7 @@ export default function ProductsManager({ initialProducts, categories }: Props) 
                         </button>
                       </div>
                       <button
-                        onClick={() => downloadLabel(product)}
+                        onClick={() => handleDownloadLabel(product)}
                         className="w-full text-sm bg-blue-50 hover:bg-blue-100 text-blue-600 py-2 rounded-lg font-medium"
                       >
                         🏷️ 下載 QR 標籤

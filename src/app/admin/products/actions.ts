@@ -67,7 +67,7 @@ export async function duplicateProduct(id: string) {
   const { error } = await supabase.from("products").insert({
     ...rest,
     name: rest.name + "（副本）",
-    sku: rest.sku ? null : null, // 副本不繼承 SKU，避免重複
+    sku: generateSku(), // 複製品永遠生成新 SKU，避免與原品重複
   });
   if (error) throw new Error(error.message);
   revalidatePath("/admin/products");
