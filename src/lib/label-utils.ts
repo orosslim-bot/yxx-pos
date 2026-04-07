@@ -1,4 +1,4 @@
-import QRCode from "qrcode";
+import JsBarcode from "jsbarcode";
 
 export type LabelProduct = {
   sku: string | null | undefined;
@@ -6,72 +6,102 @@ export type LabelProduct = {
   price: number;
 };
 
+// 自動生成 SKU（8 位數字）
+export function generateSku(): string {
+  return Math.floor(10000000 + Math.random() * 90000000).toString();
+}
+
+// T40*20 = 40mm × 20mm → 以 400×200px 繪製
 export async function drawLabel(product: LabelProduct): Promise<HTMLCanvasElement> {
+  const W = 400;
+  const H = 200;
   const canvas = document.createElement("canvas");
-  canvas.width = 400;
-  canvas.height = 240;
+  canvas.width = W;
+  canvas.height = H;
   const ctx = canvas.getContext("2d")!;
 
+  // 白底
   ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, 400, 240);
+  ctx.fillRect(0, 0, W, H);
 
-  ctx.strokeStyle = "#e5e7eb";
-  ctx.lineWidth = 2;
-  ctx.strokeRect(1, 1, 398, 238);
+  const sku = product.sku ?? generateSku();
 
-  const sku = product.sku ?? "000000";
-  const qrCanvas = document.createElement("canvas");
-  await QRCode.toCanvas(qrCanvas, sku, { width: 160, margin: 1, color: { dark: "#111111", light: "#ffffff" } });
-  ctx.drawImage(qrCanvas, 20, 40, 160, 160);
-
-  ctx.strokeStyle = "#e5e7eb";
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(195, 20);
-  ctx.lineTo(195, 220);
-  ctx.stroke();
-
-  ctx.fillStyle = "#111111";
-  ctx.font = "bold 20px sans-serif";
+  // ── 上方：品名 ──
+  ctx.fillStyle = "#000000";
+  ctx.textAlign = "center";
   ctx.textBaseline = "top";
+
+  // 自動縮字，最多兩行
   const name = product.name;
-  const maxW = 185;
-  const x = 205;
-  let y = 30;
-  let line = "";
-  let lineCount = 0;
-  for (const char of name) {
-    const test = line + char;
-    if (ctx.measureText(test).width > maxW && lineCount < 1) {
-      ctx.fillText(line, x, y);
-      line = char;
-      y += 28;
-      lineCount++;
+  const maxW = W - 24;
+  let fontSize = 22;
+  ctx.font = `bold ${fontSize}px sans-serif`;
+
+  // 若名稱太長就縮小字體
+  while (ctx.measureText(name).width > maxW * 2 && fontSize > 12) {
+    fontSize -= 1;
+    ctx.font = `bold ${fontSize}px sans-serif`;
+  }
+
+  const lineH = fontSize + 4;
+  const words = [...name]; // 逐字元拆
+  let line1 = "";
+  let line2 = "";
+  let overflow = false;
+  for (const ch of words) {
+    if (ctx.measureText(line1 + ch).width <= maxW) {
+      line1 += ch;
+    } else if (!overflow && ctx.measureText(line2 + ch).width <= maxW) {
+      line2 += ch;
     } else {
-      line = test;
+      overflow = true;
     }
   }
-  if (line) {
-    const displayLine = ctx.measureText(line).width > maxW ? line.slice(0, 10) + "…" : line;
-    ctx.fillText(displayLine, x, y);
+  if (overflow && line2.length > 0) {
+    // 截斷第二行加省略號
+    while (ctx.measureText(line2 + "…").width > maxW && line2.length > 0) {
+      line2 = line2.slice(0, -1);
+    }
+    line2 += "…";
   }
 
-  ctx.font = "bold 38px sans-serif";
-  ctx.fillStyle = "#ec4899";
-  ctx.fillText(`$${product.price}`, x, 130);
+  const nameY = 8;
+  ctx.fillText(line1, W / 2, nameY);
+  if (line2) ctx.fillText(line2, W / 2, nameY + lineH);
 
-  ctx.font = "14px monospace";
-  ctx.fillStyle = "#6b7280";
-  ctx.fillText(`SKU: ${sku}`, x, 190);
+  // ── 中間：價格 ──
+  ctx.font = "bold 40px sans-serif";
+  ctx.fillStyle = "#000000";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(`$${product.price}`, W / 2, 90);
+
+  // ── 下方：條形碼（無數字）──
+  const barcodeCanvas = document.createElement("canvas");
+  JsBarcode(barcodeCanvas, sku, {
+    format: "CODE128",
+    displayValue: false, // 不顯示數字
+    width: 2,
+    height: 52,
+    margin: 0,
+    lineColor: "#000000",
+    background: "#ffffff",
+  });
+
+  // 置中貼到底部
+  const bw = Math.min(barcodeCanvas.width, W - 20);
+  const bx = (W - bw) / 2;
+  const by = H - barcodeCanvas.height - 8;
+  ctx.drawImage(barcodeCanvas, bx, by, bw, barcodeCanvas.height);
 
   return canvas;
 }
 
 export async function downloadLabel(product: LabelProduct): Promise<void> {
-  if (!product.sku) { alert("此商品沒有 SKU，無法產生標籤"); return; }
-  const canvas = await drawLabel(product);
+  const sku = product.sku ?? generateSku();
+  const canvas = await drawLabel({ ...product, sku });
   const link = document.createElement("a");
   link.href = canvas.toDataURL("image/png");
-  link.download = `label-${product.sku}.png`;
+  link.download = `label-${sku}.png`;
   link.click();
 }

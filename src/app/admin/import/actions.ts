@@ -3,6 +3,10 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { revalidatePath } from "next/cache";
 
+function generateSku(): string {
+  return Math.floor(10000000 + Math.random() * 90000000).toString();
+}
+
 type ImportRow = {
   sku: string;
   name: string;
@@ -28,7 +32,7 @@ export async function importProducts(rows: ImportRow[]) {
   const products = rows
     .filter((r) => r.name.trim())
     .map((r) => ({
-      sku: r.sku || null,
+      sku: r.sku || generateSku(),
       name: r.name.trim(),
       category_id: categoryMap.get(r.category) ?? null,
       price: Number(r.price) || 0,

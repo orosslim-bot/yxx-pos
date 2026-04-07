@@ -3,6 +3,10 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { revalidatePath } from "next/cache";
 
+function generateSku(): string {
+  return Math.floor(10000000 + Math.random() * 90000000).toString();
+}
+
 type ProductData = {
   sku?: string | null;
   name: string;
@@ -18,7 +22,8 @@ type ProductData = {
 
 export async function createProduct(data: ProductData) {
   const supabase = createServiceClient();
-  const { error } = await supabase.from("products").insert(data);
+  const payload = { ...data, sku: data.sku || generateSku() };
+  const { error } = await supabase.from("products").insert(payload);
   if (error) throw new Error(error.message);
   revalidatePath("/admin/products");
 }

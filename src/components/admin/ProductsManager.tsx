@@ -11,8 +11,8 @@ import {
   bulkDeleteProducts,
   duplicateProduct,
 } from "@/app/admin/products/actions";
-import JSZip from "jszip";
-import { drawLabel, downloadLabel } from "@/lib/label-utils";
+import * as XLSX from "xlsx";
+import { downloadLabel, generateSku } from "@/lib/label-utils";
 
 type Props = {
   initialProducts: Product[];
@@ -236,24 +236,18 @@ export default function ProductsManager({ initialProducts, categories }: Props) 
   const displayImage = imagePreview ?? currentImageUrl;
 
   async function downloadAllLabels() {
-    const productsWithSku = initialProducts.filter((p) => p.sku);
-    if (productsWithSku.length === 0) { alert("沒有商品有 SKU"); return; }
+    if (initialProducts.length === 0) { alert("沒有商品"); return; }
     setBatchDownloading(true);
     try {
-      const zip = new JSZip();
-      for (const product of productsWithSku) {
-        const canvas = await drawLabel(product);
-        const blob = await new Promise<Blob>((resolve) =>
-          canvas.toBlob((b) => resolve(b!), "image/png")
-        );
-        zip.file(`label-${product.sku}.png`, blob);
-      }
-      const content = await zip.generateAsync({ type: "blob" });
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(content);
-      link.download = `YXX-labels-all.zip`;
-      link.click();
-      URL.revokeObjectURL(link.href);
+      const rows = initialProducts.map((p) => [
+        p.name,
+        p.price,
+        p.sku || generateSku(),
+      ]);
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Labels");
+      XLSX.writeFile(wb, "YXX-labels.xlsx");
     } finally {
       setBatchDownloading(false);
     }
@@ -284,7 +278,7 @@ export default function ProductsManager({ initialProducts, categories }: Props) 
             disabled={batchDownloading}
             className="flex items-center gap-1.5 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-gray-700 text-sm font-medium px-3 py-2 rounded-lg"
           >
-            {batchDownloading ? "產生中..." : "📥 批量下載標籤"}
+            {batchDownloading ? "產生中..." : "📥 匯出標籤 Excel"}
           </button>
           <button
             onClick={openAdd}
