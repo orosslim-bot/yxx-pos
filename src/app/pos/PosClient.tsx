@@ -915,16 +915,9 @@ export default function PosClient({
       {/* ═══ 條碼掃描器 ═══ */}
       {showScanner && (
         <div className="fixed inset-0 z-50 flex flex-col" style={{ background: "rgba(15,15,15,0.97)" }}>
-          {/* 隱藏 html5-qrcode 原生 UI */}
+          {/* 只隱藏 html5-qrcode 的檔案上傳按鈕，其餘讓它自行管理（避免破壞 qrbox 計算） */}
           <style>{`
-            #html5-qrcode-region video {
-              width: 100% !important; height: 100% !important;
-              object-fit: cover !important;
-              position: absolute !important; top: 0 !important; left: 0 !important;
-            }
-            #html5-qrcode-region__scan_region { width: 100% !important; height: 100% !important; }
             #html5-qrcode-region__dashboard { display: none !important; }
-            .qr-shaded-region { display: none !important; }
           `}</style>
 
           <div className="flex items-center justify-between px-5 py-4 flex-shrink-0">
