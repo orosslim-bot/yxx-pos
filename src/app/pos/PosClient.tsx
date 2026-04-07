@@ -62,6 +62,10 @@ export default function PosClient({
 
   const [searchQuery, setSearchQuery] = useState("");
 
+  // 購物車收合狀態
+  const [cartExpanded, setCartExpanded] = useState(false);
+  const prevCartLengthRef = useRef(0);
+
   const [showTodaySales, setShowTodaySales] = useState(false);
   const [todaySales, setTodaySales] = useState<TodaySaleItem[]>([]);
   const [todaySalesLoading, setTodaySalesLoading] = useState(false);
@@ -77,6 +81,22 @@ export default function PosClient({
   const scanControlsRef = useRef<{ stop: () => void } | null>(null);
   const lastScanRef = useRef({ text: "", time: 0 });
   const handleScanResultRef = useRef<(text: string) => void>(() => {});
+
+  // 購物車自動收合邏輯
+  useEffect(() => {
+    const prev = prevCartLengthRef.current;
+    const curr = cart.length;
+    if (curr === 0) {
+      setCartExpanded(false);
+    } else if (prev === 0 && curr === 1) {
+      // 第一件加入 → 展開讓攤販確認
+      setCartExpanded(true);
+    } else if (prev < 3 && curr >= 3) {
+      // 第三件加入 → 自動收合，還空間給商品格
+      setCartExpanded(false);
+    }
+    prevCartLengthRef.current = curr;
+  }, [cart.length]);
 
   // Auto-dismiss error 6s
   useEffect(() => {
@@ -416,39 +436,45 @@ export default function PosClient({
         </div>
       </div>
 
-      {/* ═══ 購物車（固定區，不捲動） ═══ */}
+      {/* ═══ 購物車（可收合條） ═══ */}
       {cart.length > 0 && (
         <div
-          className="flex-shrink-0 mx-3 mt-2 mb-0 rounded-lg overflow-hidden overflow-y-auto"
-          style={{
-            background: C.card,
-            border: `1px solid ${C.border}`,
-            maxHeight: "42vh",
-          }}
+          className="flex-shrink-0 mx-3 mt-2 rounded-lg overflow-hidden"
+          style={{ background: C.card, border: `1px solid ${C.border}` }}
         >
-            {/* 購物車標題 */}
-            <div
-              className="px-4 py-2.5 flex items-center"
-              style={{ borderBottom: `1px solid ${C.border}` }}
+          {/* ── 摘要列：永遠 48px，點擊展開/收合 ── */}
+          <div className="flex items-center px-4" style={{ height: 48 }}>
+            <button
+              onClick={() => setCartExpanded((v) => !v)}
+              className="flex items-center gap-2 flex-1 min-w-0 h-full active:opacity-70 transition-opacity"
             >
-              <span className="text-sm font-medium flex-1" style={{ color: C.mid }}>
-                購物車（{cartQty} 件）
-              </span>
-              <span
-                className="font-bold mr-3"
-                style={{ color: C.terra, fontSize: 15, ...F_PLAYFAIR }}
-              >
+              <span className="font-medium text-sm" style={{ color: C.mid }}>{cartQty} 件</span>
+              <span style={{ color: C.border2, fontSize: 12 }}>·</span>
+              <span className="font-bold" style={{ color: C.terra, fontSize: 17, ...F_PLAYFAIR }}>
                 ${cartTotal.toLocaleString()}
               </span>
-              <button
-                onClick={() => setCart([])}
-                className="text-sm px-3 py-1 rounded-md active:opacity-60 transition-opacity min-w-[44px] flex items-center"
-                style={{ color: C.light }}
-              >清空</button>
-            </div>
+              <span className="text-xs ml-0.5" style={{ color: C.light }}>
+                {cartExpanded ? "▲" : "▼"}
+              </span>
+            </button>
+            <button
+              onClick={() => setCart([])}
+              className="h-11 px-3 flex items-center text-xs rounded-md active:opacity-50 transition-opacity"
+              style={{ color: C.light }}
+            >清空</button>
+          </div>
 
-            {/* 購物車品項 */}
-            <div>
+          {/* ── 展開區域：200ms smooth ── */}
+          <div
+            style={{
+              maxHeight: cartExpanded ? "50vh" : 0,
+              overflow: "hidden",
+              transition: "max-height 200ms ease-out",
+            }}
+          >
+            {/* 分隔線放在展開區內，隨內容一起顯示/隱藏 */}
+            <div style={{ height: 1, background: C.border }} />
+            <div style={{ maxHeight: "50vh", overflowY: "auto" }}>
               {cart.map((item, idx) => {
                 const effectivePrice = item.overridePrice ?? item.product.price;
                 const isOverride = item.overridePrice !== undefined;
@@ -508,6 +534,7 @@ export default function PosClient({
                 );
               })}
             </div>
+          </div>
         </div>
       )}
 
