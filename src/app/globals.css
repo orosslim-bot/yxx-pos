@@ -23,14 +23,14 @@
 }
 
 body {
-  background: #ffffff;
-  color: #111111;
-  font-family: Arial, Helvetica, sans-serif;
+  background: #F7F6F2;
+  color: #333333;
+  font-family: var(--font-noto, "Noto Sans TC", system-ui, sans-serif);
 }
 
 /* 全站預設深色（不加 !important，讓 Tailwind text-white 等可正常覆蓋） */
 * {
-  color: #111111;
+  color: #333333;
 }
 
 /* 強制表格、標籤、標題深色（這些不會有白色文字的場景） */
@@ -38,14 +38,14 @@ table, td, th, tr,
 p, label,
 h1, h2, h3, h4, h5, h6,
 li {
-  color: #111111 !important;
+  color: #333333 !important;
 }
 
 /* 輸入框深字（background 讓元件自訂，不強制白底） */
 input, textarea, select {
-  color: #111111 !important;
+  color: #333333 !important;
 }
 
 input::placeholder, textarea::placeholder {
-  color: #9ca3af !important;
+  color: #C4C4C4 !important;
 }

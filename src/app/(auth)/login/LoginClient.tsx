@@ -5,6 +5,20 @@ import { createClient } from "@/lib/supabase/client";
 
 type Booth = { id: number; name: string };
 
+const M = {
+  bg:      "#F7F6F2",
+  border:  "#E0E0E0",
+  ink:     "#333333",
+  mid:     "#888888",
+  muted:   "#C4C4C4",
+  hover:   "#EEEDE9",
+  danger:  "#C0392B",
+} as const;
+
+const NOTO: React.CSSProperties = {
+  fontFamily: "var(--font-noto, 'Noto Sans TC', system-ui, sans-serif)",
+};
+
 export default function LoginClient() {
   const [mode, setMode] = useState<"booth" | "boss">("booth");
   const [email, setEmail] = useState("");
@@ -39,7 +53,6 @@ export default function LoginClient() {
       setError("帳號或密碼錯誤");
       setLoading(false);
     } else {
-      // 讓 Supabase SSR cookie 寫入後再跳頁
       window.location.href = "/pos";
     }
   }
@@ -63,35 +76,90 @@ export default function LoginClient() {
     }
   }
 
+  const tabBase: React.CSSProperties = {
+    ...NOTO,
+    flex: 1,
+    padding: "12px 0",
+    fontSize: 14,
+    fontWeight: 400,
+    background: "transparent",
+    border: "none",
+    borderBottom: "2px solid transparent",
+    cursor: "pointer",
+    transition: "border-color 0.15s, color 0.15s",
+  };
+
+  const inputStyle: React.CSSProperties = {
+    ...NOTO,
+    width: "100%",
+    padding: "14px 16px",
+    fontSize: 16,
+    border: `1px solid ${M.border}`,
+    borderRadius: 2,
+    background: "#FFFFFF",
+    color: M.ink,
+    outline: "none",
+    boxSizing: "border-box",
+  };
+
+  const labelStyle: React.CSSProperties = {
+    ...NOTO,
+    display: "block",
+    fontSize: 12,
+    color: M.mid,
+    marginBottom: 6,
+    letterSpacing: 0.5,
+  };
+
+  const primaryBtn: React.CSSProperties = {
+    ...NOTO,
+    width: "100%",
+    padding: "16px 0",
+    fontSize: 15,
+    fontWeight: 500,
+    background: loading ? M.muted : M.ink,
+    color: "#FFFFFF",
+    border: "none",
+    borderRadius: 2,
+    cursor: loading ? "not-allowed" : "pointer",
+    letterSpacing: 1,
+    transition: "background 0.15s",
+  };
+
   return (
-    <div>
-      <div className="flex rounded-xl overflow-hidden border border-gray-200 mb-6">
+    <div style={{ ...NOTO }}>
+      {/* Tab switcher */}
+      <div style={{ display: "flex", borderBottom: `1px solid ${M.border}`, marginBottom: 28 }}>
         <button
           onClick={() => { setMode("booth"); setError(null); }}
-          className={`flex-1 py-3 text-sm font-medium transition-colors ${
-            mode === "booth" ? "bg-pink-500 text-white" : "bg-white text-gray-600"
-          }`}
+          style={{
+            ...tabBase,
+            color: mode === "booth" ? M.ink : M.mid,
+            borderBottom: mode === "booth" ? `2px solid ${M.ink}` : "2px solid transparent",
+          }}
         >
           攤位登入
         </button>
         <button
           onClick={() => { setMode("boss"); setError(null); }}
-          className={`flex-1 py-3 text-sm font-medium transition-colors ${
-            mode === "boss" ? "bg-gray-800 text-white" : "bg-white text-gray-600"
-          }`}
+          style={{
+            ...tabBase,
+            color: mode === "boss" ? M.ink : M.mid,
+            borderBottom: mode === "boss" ? `2px solid ${M.ink}` : "2px solid transparent",
+          }}
         >
           老闆登入
         </button>
       </div>
 
       {mode === "booth" ? (
-        <form onSubmit={handleBoothLogin} className="space-y-4">
+        <form onSubmit={handleBoothLogin} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">選擇攤位</label>
+            <span style={labelStyle}>選擇攤位</span>
             <select
               value={boothName}
               onChange={(e) => setBoothName(e.target.value)}
-              className="w-full px-4 py-4 text-lg border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-400"
+              style={{ ...inputStyle, fontSize: 16 }}
             >
               {booths.map((b) => (
                 <option key={b.id} value={b.name}>{b.name}</option>
@@ -99,7 +167,7 @@ export default function LoginClient() {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">PIN 碼（4 位數字）</label>
+            <span style={labelStyle}>PIN 碼（4 位數字）</span>
             <input
               type="password"
               inputMode="numeric"
@@ -107,52 +175,48 @@ export default function LoginClient() {
               value={pin}
               onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
               placeholder="••••"
-              className="w-full px-4 py-4 text-2xl text-center tracking-[0.5em] border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-400"
+              style={{ ...inputStyle, fontSize: 24, textAlign: "center", letterSpacing: "0.5em" }}
             />
           </div>
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">{error}</div>
+            <div style={{ ...NOTO, background: "#FDF2F2", border: `1px solid #E8BBBB`, color: M.danger, padding: "12px 16px", borderRadius: 2, fontSize: 13 }}>
+              {error}
+            </div>
           )}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-pink-500 hover:bg-pink-600 disabled:bg-pink-300 text-white font-bold py-4 rounded-xl text-lg"
-          >
+          <button type="submit" disabled={loading} style={primaryBtn}>
             {loading ? "登入中..." : "進入收銀台"}
           </button>
         </form>
       ) : (
-        <form onSubmit={handleBossLogin} className="space-y-4">
+        <form onSubmit={handleBossLogin} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">電子郵件</label>
+            <span style={labelStyle}>電子郵件</span>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
               placeholder="請輸入 Email"
-              className="w-full px-4 py-4 text-lg border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-400"
+              style={inputStyle}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">密碼</label>
+            <span style={labelStyle}>密碼</span>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
               placeholder="請輸入密碼"
-              className="w-full px-4 py-4 text-lg border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-400"
+              style={inputStyle}
             />
           </div>
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">{error}</div>
+            <div style={{ ...NOTO, background: "#FDF2F2", border: `1px solid #E8BBBB`, color: M.danger, padding: "12px 16px", borderRadius: 2, fontSize: 13 }}>
+              {error}
+            </div>
           )}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-pink-500 hover:bg-pink-600 disabled:bg-pink-300 text-white font-bold py-4 rounded-xl text-lg"
-          >
+          <button type="submit" disabled={loading} style={primaryBtn}>
             {loading ? "登入中..." : "老闆登入"}
           </button>
         </form>

@@ -21,25 +21,23 @@ type Props = {
   linePayQrUrl: string;
 };
 
-// 字型快捷 style
-const F_PLAYFAIR = { fontFamily: "var(--font-playfair, Georgia, serif)" } as const;
-const F_OUTFIT   = { fontFamily: "var(--font-outfit, system-ui, sans-serif)" } as const;
-
-// 色票
-const C = {
-  bg:      "#F7F3ED",
-  card:    "#FFFFFF",
-  border:  "#EDE5D8",
-  border2: "#D5C9BC",
-  terra:   "#A8522A",  // 陶土棕（主色）
-  sage:    "#4A7A4E",  // 苔蘚綠（現金）
-  amber:   "#B07828",  // 琥珀棕（低庫存）
-  ink:     "#1E1A16",  // 墨色（主文字）
-  mid:     "#6B6257",  // 暖灰中（次文字）
-  light:   "#9E9388",  // 暖灰淡（說明）
-  hover:   "#F2EAE0",  // 陶土 hover
-  disabled:"#C8C2BB",
+// MUJI 色票
+const M = {
+  bg:      "#F7F6F2",
+  surface: "#FFFFFF",
+  border:  "#E0E0E0",
+  ink:     "#333333",
+  mid:     "#888888",
+  muted:   "#C4C4C4",
+  hover:   "#EEEDE9",
+  danger:  "#C0392B",
+  warm:    "#8C7355",
+  disabled:"#E0E0E0",
 } as const;
+
+const NOTO: React.CSSProperties = {
+  fontFamily: "var(--font-noto, 'Noto Sans TC', system-ui, sans-serif)",
+};
 
 export default function PosClient({
   initialProducts,
@@ -89,10 +87,8 @@ export default function PosClient({
     if (curr === 0) {
       setCartExpanded(false);
     } else if (prev === 0 && curr === 1) {
-      // 第一件加入 → 展開讓攤販確認
       setCartExpanded(true);
     } else if (prev < 3 && curr >= 3) {
-      // 第三件加入 → 自動收合，還空間給商品格
       setCartExpanded(false);
     }
     prevCartLengthRef.current = curr;
@@ -199,10 +195,10 @@ export default function PosClient({
     if (sku === lastScanRef.current.text && now - lastScanRef.current.time < 2500) return;
     lastScanRef.current = { text: sku, time: now };
     const product = products.find((p) => p.sku === sku);
-    if (!product) { setScanMsg(`❓ 找不到 SKU：${sku}`); return; }
-    if (product.stock <= 0) { setScanMsg(`❌「${product.name}」庫存不足`); return; }
+    if (!product) { setScanMsg(`？ 找不到 SKU：${sku}`); return; }
+    if (product.stock <= 0) { setScanMsg(`✗「${product.name}」庫存不足`); return; }
     addToCart(product);
-    setScanMsg(`✅ 已加入：${product.name}（$${product.price}）`);
+    setScanMsg(`✓ 已加入：${product.name}（$${product.price}）`);
   };
 
   useEffect(() => {
@@ -295,19 +291,21 @@ export default function PosClient({
     setScanMsg(null);
   };
 
+  const isDisabled = cart.length === 0 || !!checkoutLoading;
+
   return (
     <div
       className="h-dvh flex flex-col overflow-hidden"
-      style={{ background: C.bg, ...F_OUTFIT }}
+      style={{ background: M.bg, ...NOTO }}
     >
       {/* ═══ HEADER ═══ */}
-      <header style={{ background: C.card, borderBottom: `1px solid ${C.border}` }} className="flex-shrink-0">
+      <header style={{ background: M.surface, borderBottom: `1px solid ${M.border}` }} className="flex-shrink-0">
         <div className="px-4 py-2.5 flex items-center gap-2">
           {/* 攤位名稱 */}
           <div className="flex-1 min-w-0">
             <span
               className="text-sm font-medium truncate block"
-              style={{ color: C.ink, ...F_PLAYFAIR, fontStyle: "italic" }}
+              style={{ color: M.ink, letterSpacing: 1 }}
             >
               {displayName}
             </span>
@@ -316,20 +314,20 @@ export default function PosClient({
           {/* 桌機掃描 */}
           <button
             onClick={scanOpen}
-            className="hidden sm:flex items-center gap-1.5 text-sm px-3 py-2 rounded-md active:scale-95 transition-all flex-shrink-0"
-            style={{ background: C.bg, color: C.terra, border: `1px solid ${C.border}` }}
+            className="hidden sm:flex items-center gap-1.5 text-sm px-3 py-2 active:opacity-70 transition-opacity flex-shrink-0"
+            style={{ background: M.bg, color: M.mid, border: `1px solid ${M.border}`, borderRadius: 2 }}
           >
-            <span>📷</span><span>掃描</span>
+            <span>掃描</span>
           </button>
 
           {/* 今日業績 */}
           <button
             onClick={openTodaySales}
-            className="flex-shrink-0 px-3 py-1.5 rounded-md text-right active:scale-95 transition-all"
-            style={{ background: C.bg, border: `1px solid ${C.border}` }}
+            className="flex-shrink-0 px-3 py-1.5 text-right active:opacity-70 transition-opacity"
+            style={{ background: M.bg, border: `1px solid ${M.border}`, borderRadius: 2 }}
           >
-            <div className="text-xs leading-none" style={{ color: C.light }}>今日業績</div>
-            <div className="text-sm font-bold mt-0.5" style={{ color: C.terra, ...F_PLAYFAIR }}>
+            <div className="text-xs leading-none" style={{ color: M.muted }}>今日業績</div>
+            <div className="text-sm font-bold mt-0.5" style={{ color: M.ink, fontVariantNumeric: "tabular-nums" }}>
               {todayCount}筆・${todayTotal.toLocaleString()}
             </div>
           </button>
@@ -337,16 +335,16 @@ export default function PosClient({
           {isAdmin && (
             <Link
               href="/admin/dashboard"
-              className="text-xs px-2 py-1.5 rounded-md active:scale-95 transition-all flex-shrink-0"
-              style={{ background: C.bg, color: C.mid, border: `1px solid ${C.border}` }}
+              className="text-xs px-2 py-1.5 active:opacity-70 transition-opacity flex-shrink-0"
+              style={{ background: M.bg, color: M.mid, border: `1px solid ${M.border}`, borderRadius: 2 }}
             >後台</Link>
           )}
           {booth && (
             <form action={boothLogout}>
               <button
                 type="submit"
-                className="text-xs px-2 py-1 rounded-md active:opacity-70 transition-opacity flex-shrink-0"
-                style={{ color: C.light }}
+                className="text-xs px-2 py-1 active:opacity-70 transition-opacity flex-shrink-0"
+                style={{ color: M.muted }}
               >登出</button>
             </form>
           )}
@@ -356,11 +354,10 @@ export default function PosClient({
         <div className="sm:hidden px-4 pb-3">
           <button
             onClick={scanOpen}
-            className="w-full font-medium py-3.5 rounded-md text-sm flex items-center justify-center gap-2 active:scale-[0.98] active:opacity-90 transition-all"
-            style={{ background: C.terra, color: "#fff" }}
+            className="w-full font-medium py-3.5 text-sm flex items-center justify-center gap-2 active:opacity-80 transition-opacity"
+            style={{ background: M.ink, color: "#fff", borderRadius: 2, letterSpacing: 1 }}
           >
-            <span>📷</span>
-            <span>掃描條碼</span>
+            掃描條碼
           </button>
         </div>
       </header>
@@ -370,18 +367,18 @@ export default function PosClient({
         <div className="flex-shrink-0 px-4 pt-2 pb-0.5">
           {successMsg && (
             <div
-              className="px-4 py-2.5 rounded-r-lg shadow-sm flex items-center gap-2"
-              style={{ background: C.card, borderLeft: `4px solid ${C.sage}` }}
+              className="px-4 py-2.5 flex items-center gap-2"
+              style={{ background: M.surface, borderLeft: `3px solid ${M.ink}`, borderRadius: 2 }}
             >
-              <span className="text-sm font-medium" style={{ color: C.sage }}>✓ {successMsg}</span>
+              <span className="text-sm font-medium" style={{ color: M.ink }}>✓ {successMsg}</span>
             </div>
           )}
           {errorMsg && (
             <div
-              className="px-4 py-2.5 rounded-r-lg shadow-sm"
-              style={{ background: C.card, borderLeft: "4px solid #C0392B" }}
+              className="px-4 py-2.5"
+              style={{ background: M.surface, borderLeft: `3px solid ${M.danger}`, borderRadius: 2 }}
             >
-              <span className="text-sm font-medium" style={{ color: "#C0392B" }}>✗ {errorMsg}</span>
+              <span className="text-sm font-medium" style={{ color: M.danger }}>✗ {errorMsg}</span>
             </div>
           )}
         </div>
@@ -390,7 +387,7 @@ export default function PosClient({
       {/* ═══ 搜尋 + 分類（固定，不捲動） ═══ */}
       <div
         className="flex-shrink-0"
-        style={{ background: C.card, borderBottom: `1px solid ${C.border}` }}
+        style={{ background: M.surface, borderBottom: `1px solid ${M.border}` }}
       >
         {/* 搜尋欄 */}
         <div className="px-4 pt-3 pb-2">
@@ -399,39 +396,47 @@ export default function PosClient({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="搜尋商品名稱或 SKU..."
-            className="w-full px-4 py-2.5 rounded-md text-sm focus:outline-none transition-all"
+            className="w-full px-4 py-2.5 text-sm focus:outline-none transition-all"
             style={{
-              background: C.bg,
-              color: C.ink,
-              border: `1px solid ${C.border}`,
+              background: M.bg,
+              color: M.ink,
+              border: `1px solid ${M.border}`,
+              borderRadius: 2,
+              ...NOTO,
             }}
-            onFocus={(e) => { e.target.style.borderColor = C.terra; }}
-            onBlur={(e)  => { e.target.style.borderColor = C.border; }}
+            onFocus={(e) => { e.target.style.borderColor = M.ink; }}
+            onBlur={(e)  => { e.target.style.borderColor = M.border; }}
           />
         </div>
 
-        {/* 分類 Tab */}
+        {/* 分類 Tab — 下底線樣式 */}
         <div className="relative">
-          <div className="flex gap-1.5 px-4 pb-3 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+          <div
+            className="flex overflow-x-auto"
+            style={{ borderBottom: `1px solid ${M.border}`, scrollbarWidth: "none" }}
+          >
             {[{ id: "all" as const, name: "全部" }, ...categories].map((cat) => {
               const active = activeCategory === (cat.id as number | "all");
               return (
                 <button
                   key={cat.id}
                   onClick={() => setActiveCategory(cat.id as number | "all")}
-                  className="px-3 py-1.5 rounded-md text-sm whitespace-nowrap flex-shrink-0 font-medium active:scale-95 transition-all"
-                  style={
-                    active
-                      ? { background: C.terra, color: "#fff", border: `1px solid ${C.terra}` }
-                      : { background: "transparent", color: C.mid, border: `1px solid ${C.border2}` }
-                  }
+                  className="px-4 py-2.5 text-sm whitespace-nowrap flex-shrink-0 active:opacity-70 transition-all"
+                  style={{
+                    ...NOTO,
+                    color: active ? M.ink : M.mid,
+                    fontWeight: active ? 500 : 400,
+                    borderBottom: active ? `2px solid ${M.ink}` : "2px solid transparent",
+                    background: "transparent",
+                    marginBottom: -1,
+                  }}
                 >{cat.name}</button>
               );
             })}
           </div>
           <div
             className="pointer-events-none absolute right-0 top-0 bottom-0 w-8"
-            style={{ background: `linear-gradient(to left, ${C.card}, transparent)` }}
+            style={{ background: `linear-gradient(to left, ${M.surface}, transparent)` }}
           />
         </div>
       </div>
@@ -439,8 +444,8 @@ export default function PosClient({
       {/* ═══ 購物車（可收合條） ═══ */}
       {cart.length > 0 && (
         <div
-          className="flex-shrink-0 mx-3 mt-2 rounded-lg overflow-hidden"
-          style={{ background: C.card, border: `1px solid ${C.border}` }}
+          className="flex-shrink-0 mx-3 mt-2 overflow-hidden"
+          style={{ background: M.surface, border: `1px solid ${M.border}`, borderRadius: 2 }}
         >
           {/* ── 摘要列：永遠 48px，點擊展開/收合 ── */}
           <div className="flex items-center px-4" style={{ height: 48 }}>
@@ -448,19 +453,19 @@ export default function PosClient({
               onClick={() => setCartExpanded((v) => !v)}
               className="flex items-center gap-2 flex-1 min-w-0 h-full active:opacity-70 transition-opacity"
             >
-              <span className="font-medium text-sm" style={{ color: C.mid }}>{cartQty} 件</span>
-              <span style={{ color: C.border2, fontSize: 12 }}>·</span>
-              <span className="font-bold" style={{ color: C.terra, fontSize: 17, ...F_PLAYFAIR }}>
+              <span className="font-medium text-sm" style={{ color: M.mid }}>{cartQty} 件</span>
+              <span style={{ color: M.border, fontSize: 12 }}>·</span>
+              <span className="font-bold" style={{ color: M.ink, fontSize: 17, fontVariantNumeric: "tabular-nums" }}>
                 ${cartTotal.toLocaleString()}
               </span>
-              <span className="text-xs ml-0.5" style={{ color: C.light }}>
+              <span className="text-xs ml-0.5" style={{ color: M.muted }}>
                 {cartExpanded ? "▲" : "▼"}
               </span>
             </button>
             <button
               onClick={() => setCart([])}
-              className="h-11 px-3 flex items-center text-xs rounded-md active:opacity-50 transition-opacity"
-              style={{ color: C.light }}
+              className="h-11 px-3 flex items-center text-xs active:opacity-50 transition-opacity"
+              style={{ color: M.muted }}
             >清空</button>
           </div>
 
@@ -472,8 +477,7 @@ export default function PosClient({
               transition: "max-height 200ms ease-out",
             }}
           >
-            {/* 分隔線放在展開區內，隨內容一起顯示/隱藏 */}
-            <div style={{ height: 1, background: C.border }} />
+            <div style={{ height: 1, background: M.border }} />
             <div style={{ maxHeight: "50vh", overflowY: "auto" }}>
               {cart.map((item, idx) => {
                 const effectivePrice = item.overridePrice ?? item.product.price;
@@ -482,50 +486,52 @@ export default function PosClient({
                   <div
                     key={item.product.id}
                     className="px-3 py-2.5"
-                    style={idx < cart.length - 1 ? { borderBottom: `1px solid ${C.border}` } : undefined}
+                    style={idx < cart.length - 1 ? { borderBottom: `1px solid ${M.border}` } : undefined}
                   >
                     <div className="flex items-center gap-2 mb-2">
-                      <div className="w-9 h-9 rounded-md overflow-hidden flex-shrink-0" style={{ background: C.bg }}>
+                      <div className="w-9 h-9 overflow-hidden flex-shrink-0" style={{ background: M.bg, borderRadius: 2 }}>
                         {item.product.image_url ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={item.product.image_url} alt={item.product.name} className="w-full h-full object-cover" />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center text-sm">🧶</div>
+                          <div className="w-full h-full flex items-center justify-center" style={{ color: M.muted, fontSize: 10 }}>
+                            {item.product.name.slice(0, 1)}
+                          </div>
                         )}
                       </div>
-                      <span className="flex-1 text-sm font-medium truncate" style={{ color: C.ink }}>{item.product.name}</span>
+                      <span className="flex-1 text-sm font-medium truncate" style={{ color: M.ink }}>{item.product.name}</span>
                       <button
                         onClick={() => removeFromCart(item.product.id)}
-                        className="w-11 h-11 flex items-center justify-center rounded-md active:opacity-50 transition-opacity text-xl flex-shrink-0"
-                        style={{ color: C.light }}
+                        className="w-11 h-11 flex items-center justify-center text-xl flex-shrink-0 active:opacity-50 transition-opacity"
+                        style={{ color: M.muted }}
                       >×</button>
                     </div>
                     <div className="flex items-center gap-2 pl-11">
                       <button
                         onClick={() => updateQty(item.product.id, -1)}
-                        className="w-11 h-11 rounded-md flex items-center justify-center font-bold text-xl active:scale-90 transition-all"
-                        style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.ink }}
+                        className="w-11 h-11 flex items-center justify-center font-bold text-xl active:scale-90 transition-all"
+                        style={{ background: M.bg, border: `1px solid ${M.border}`, color: M.ink, borderRadius: 2 }}
                       >−</button>
-                      <span className="w-8 text-center font-bold text-base" style={{ color: C.ink }}>{item.quantity}</span>
+                      <span className="w-8 text-center font-bold text-base" style={{ color: M.ink }}>{item.quantity}</span>
                       <button
                         onClick={() => updateQty(item.product.id, 1)}
-                        className="w-11 h-11 rounded-md flex items-center justify-center font-bold text-xl active:scale-90 transition-all"
-                        style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.ink }}
+                        className="w-11 h-11 flex items-center justify-center font-bold text-xl active:scale-90 transition-all"
+                        style={{ background: M.bg, border: `1px solid ${M.border}`, color: M.ink, borderRadius: 2 }}
                       >+</button>
                       <button
                         onClick={() => openPriceEdit(item.product.id, effectivePrice)}
-                        className="px-2 py-1 rounded-md text-sm active:scale-95 transition-transform"
+                        className="px-2 py-1 text-sm active:scale-95 transition-transform"
                         style={
                           isOverride
-                            ? { border: `1px solid ${C.amber}`, background: "#FDF3E3", color: C.amber }
-                            : { border: `1px solid ${C.border}`, color: C.mid }
+                            ? { border: `1px solid ${M.warm}`, background: "#F5F0E8", color: M.warm, borderRadius: 2 }
+                            : { border: `1px solid ${M.border}`, color: M.mid, borderRadius: 2 }
                         }
                       >
-                        ${effectivePrice}{isOverride && " ✏️"}
+                        ${effectivePrice}{isOverride && " *"}
                       </button>
                       <span
                         className="ml-auto font-bold text-sm"
-                        style={{ color: C.terra, ...F_PLAYFAIR }}
+                        style={{ color: M.ink, fontVariantNumeric: "tabular-nums" }}
                       >
                         ${(effectivePrice * item.quantity).toLocaleString()}
                       </span>
@@ -540,7 +546,6 @@ export default function PosClient({
 
       {/* ═══ 捲動區域：只有商品格 ═══ */}
       <div className="flex-1 overflow-y-auto">
-        {/* 商品格 */}
         <div className="px-3 pb-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 mt-3">
           {filteredProducts.map((product) => {
             const inCart = cart.find((i) => i.product.id === product.id);
@@ -550,14 +555,13 @@ export default function PosClient({
             return (
               <div
                 key={product.id}
-                className="relative rounded-lg overflow-hidden flex flex-col transition-all"
+                className="relative overflow-hidden flex flex-col transition-all"
                 style={{
-                  background: C.card,
-                  border: inCart
-                    ? `1px solid ${C.terra}`
-                    : `1px solid ${C.border}`,
+                  background: M.surface,
+                  border: `1px solid ${M.border}`,
+                  borderLeft: inCart ? `2px solid ${M.ink}` : `1px solid ${M.border}`,
+                  borderRadius: 2,
                   opacity: isOut ? 0.45 : 1,
-                  boxShadow: inCart ? `0 0 0 2px ${C.terra}22` : undefined,
                 }}
               >
                 {/* 加入購物車 */}
@@ -566,32 +570,34 @@ export default function PosClient({
                   disabled={isOut}
                   className="flex-1 text-left active:scale-[0.97] transition-all disabled:cursor-not-allowed"
                 >
-                  <div className="aspect-square overflow-hidden" style={{ background: C.bg }}>
+                  <div className="aspect-square overflow-hidden" style={{ background: M.bg }}>
                     {product.image_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-3xl">🧶</div>
+                      <div className="w-full h-full flex items-center justify-center" style={{ color: M.muted, fontSize: 22, fontWeight: 300 }}>
+                        {product.name.slice(0, 1)}
+                      </div>
                     )}
                   </div>
                   <div className="p-2.5">
-                    <div className="text-xs font-medium line-clamp-2 leading-snug" style={{ color: C.ink }}>
+                    <div className="text-xs font-medium line-clamp-2 leading-snug" style={{ color: M.ink }}>
                       {product.name}
                     </div>
                     <div
                       className="font-bold mt-1.5"
-                      style={{ color: C.terra, fontSize: 15, ...F_PLAYFAIR }}
+                      style={{ color: M.ink, fontSize: 15, fontVariantNumeric: "tabular-nums" }}
                     >
                       ${product.price}
                     </div>
                     <div className="flex items-center justify-between mt-1">
-                      <span className="text-xs" style={{ color: isLow ? C.amber : C.light }}>
+                      <span className="text-xs" style={{ color: isLow ? M.warm : M.muted }}>
                         {isLow ? `⚠ ${product.stock}` : `庫存 ${product.stock}`}
                       </span>
                       {inCart && (
                         <span
-                          className="text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold"
-                          style={{ background: C.terra, color: "#fff" }}
+                          className="text-xs w-5 h-5 flex items-center justify-center font-bold"
+                          style={{ background: M.ink, color: "#fff", borderRadius: 2, fontSize: 11 }}
                         >
                           {inCart.quantity}
                         </span>
@@ -606,26 +612,27 @@ export default function PosClient({
                     onClick={() => downloadLabel(product)}
                     className="w-full text-xs font-medium active:opacity-70 transition-opacity min-h-[34px] flex items-center justify-center"
                     style={{
-                      color: C.terra,
-                      background: C.hover + "66",
-                      borderTop: `1px solid ${C.border}`,
+                      color: M.mid,
+                      background: M.bg,
+                      borderTop: `1px solid ${M.border}`,
+                      letterSpacing: 0.5,
                     }}
                   >
-                    🏷 標籤
+                    標籤
                   </button>
                 )}
 
                 {/* 低庫存/缺貨 badge */}
                 {isLow && !isOut && (
                   <div
-                    className="absolute top-1.5 left-1.5 text-white text-xs px-1.5 py-0.5 rounded"
-                    style={{ background: C.amber, fontSize: 10 }}
+                    className="absolute top-1.5 left-1.5 text-xs px-1.5 py-0.5"
+                    style={{ background: M.warm, color: "#fff", borderRadius: 2, fontSize: 10 }}
                   >低</div>
                 )}
                 {isOut && (
                   <div
-                    className="absolute top-1.5 left-1.5 text-white text-xs px-1.5 py-0.5 rounded"
-                    style={{ background: C.light, fontSize: 10 }}
+                    className="absolute top-1.5 left-1.5 text-xs px-1.5 py-0.5"
+                    style={{ background: M.muted, color: "#fff", borderRadius: 2, fontSize: 10 }}
                   >缺貨</div>
                 )}
               </div>
@@ -633,8 +640,8 @@ export default function PosClient({
           })}
 
           {filteredProducts.length === 0 && (
-            <div className="col-span-full text-center py-12" style={{ color: C.light }}>
-              <div className="text-4xl mb-2">📭</div>
+            <div className="col-span-full text-center py-12" style={{ color: M.muted }}>
+              <div className="text-sm mb-1" style={{ fontSize: 32, color: M.border }}>—</div>
               <div className="text-sm">此分類沒有商品</div>
             </div>
           )}
@@ -644,58 +651,65 @@ export default function PosClient({
       {/* ═══ 底部結帳列 ═══ */}
       <div
         className="flex-shrink-0 px-4 py-3"
-        style={{ background: C.card, borderTop: `1px solid ${C.border}` }}
+        style={{ background: M.surface, borderTop: `1px solid ${M.border}` }}
       >
         <div className="flex items-center gap-2.5">
           <div className="flex-1 min-w-0">
-            <div className="text-xs leading-none mb-0.5" style={{ color: C.light }}>總計</div>
+            <div className="text-xs leading-none mb-0.5" style={{ color: M.muted }}>總計</div>
             <div
               className="font-bold leading-tight"
-              style={{ color: C.ink, fontSize: 28, ...F_PLAYFAIR }}
+              style={{ color: M.ink, fontSize: 28, fontVariantNumeric: "tabular-nums" }}
             >
               ${cartTotal.toLocaleString()}
             </div>
           </div>
+          {/* 現金 — 黑底白字 */}
           <button
             onClick={() => doCheckout("cash")}
-            disabled={cart.length === 0 || !!checkoutLoading}
-            className="flex-1 font-semibold py-4 rounded-md text-sm active:scale-[0.97] active:opacity-90 transition-all disabled:cursor-not-allowed"
+            disabled={isDisabled}
+            className="flex-1 font-semibold py-4 text-sm active:scale-[0.97] active:opacity-90 transition-all disabled:cursor-not-allowed"
             style={{
-              background: cart.length === 0 || !!checkoutLoading ? C.disabled : C.sage,
-              color: cart.length === 0 || !!checkoutLoading ? C.light : "#fff",
+              background: isDisabled ? M.disabled : M.ink,
+              color: isDisabled ? M.muted : "#FFFFFF",
+              borderRadius: 2,
+              letterSpacing: 1,
             }}
           >
-            {checkoutLoading === "cash" ? "處理中..." : "💵 現金"}
+            {checkoutLoading === "cash" ? "處理中..." : "現金"}
           </button>
+          {/* LinePay — 白底黑框 */}
           <button
             onClick={() => { if (cart.length > 0) setShowLinePayQR(true); }}
-            disabled={cart.length === 0 || !!checkoutLoading}
-            className="flex-1 font-semibold py-4 rounded-md text-sm active:scale-[0.97] active:opacity-90 transition-all disabled:cursor-not-allowed"
+            disabled={isDisabled}
+            className="flex-1 font-semibold py-4 text-sm active:scale-[0.97] active:opacity-90 transition-all disabled:cursor-not-allowed"
             style={{
-              background: cart.length === 0 || !!checkoutLoading ? C.disabled : C.terra,
-              color: cart.length === 0 || !!checkoutLoading ? C.light : "#fff",
+              background: "#FFFFFF",
+              color: isDisabled ? M.muted : M.ink,
+              border: `1px solid ${isDisabled ? M.border : M.ink}`,
+              borderRadius: 2,
+              letterSpacing: 1,
             }}
           >
-            📱 LinePay
+            LinePay
           </button>
         </div>
       </div>
 
       {/* ═══ 改價數字鍵盤 ═══ */}
       {editingPriceId && (
-        <div className="fixed inset-0 z-50 flex items-end" style={{ background: "rgba(0,0,0,0.35)" }}>
-          <div className="w-full rounded-t-2xl p-4" style={{ background: C.card }}>
+        <div className="fixed inset-0 z-50 flex items-end" style={{ background: "rgba(51,51,51,0.4)" }}>
+          <div className="w-full p-4" style={{ background: M.surface, borderRadius: "2px 2px 0 0" }}>
             <div className="flex items-center justify-between mb-3">
-              <div className="font-semibold" style={{ color: C.ink }}>修改單價</div>
+              <div className="font-semibold" style={{ color: M.ink }}>修改單價</div>
               <button
                 onClick={() => setEditingPriceId(null)}
-                className="w-11 h-11 flex items-center justify-center rounded-md text-2xl active:opacity-60 transition-opacity"
-                style={{ color: C.light }}
+                className="w-11 h-11 flex items-center justify-center text-2xl active:opacity-60 transition-opacity"
+                style={{ color: M.muted }}
               >×</button>
             </div>
             <div
-              className="rounded-lg px-4 py-3 text-right text-3xl font-bold mb-4"
-              style={{ background: C.bg, color: C.ink, ...F_PLAYFAIR }}
+              className="px-4 py-3 text-right text-3xl font-bold mb-4"
+              style={{ background: M.bg, color: M.ink, borderRadius: 2, fontVariantNumeric: "tabular-nums" }}
             >
               ${priceInput || "0"}
             </div>
@@ -704,19 +718,19 @@ export default function PosClient({
                 <button
                   key={k}
                   onClick={() => numpadPress(k)}
-                  className="py-4 rounded-lg text-xl font-bold active:scale-95 transition-transform"
+                  className="py-4 text-xl font-bold active:scale-95 transition-transform"
                   style={
-                    k === "C"  ? { background: "#FEE2E2", color: "#DC2626" } :
-                    k === "⌫" ? { background: "#FEF3C7", color: C.amber } :
-                    { background: C.bg, color: C.ink }
+                    k === "C"  ? { background: "#FEE2E2", color: "#DC2626", borderRadius: 2 } :
+                    k === "⌫" ? { background: M.bg, color: M.warm, border: `1px solid ${M.border}`, borderRadius: 2 } :
+                    { background: M.bg, color: M.ink, border: `1px solid ${M.border}`, borderRadius: 2 }
                   }
                 >{k}</button>
               ))}
             </div>
             <button
               onClick={confirmPriceEdit}
-              className="w-full font-semibold py-4 rounded-lg text-lg active:opacity-90 transition-opacity"
-              style={{ background: C.terra, color: "#fff" }}
+              className="w-full font-semibold py-4 text-lg active:opacity-90 transition-opacity"
+              style={{ background: M.ink, color: "#fff", borderRadius: 2 }}
             >確認</button>
           </div>
         </div>
@@ -724,21 +738,21 @@ export default function PosClient({
 
       {/* ═══ LinePay QR Modal ═══ */}
       {showLinePayQR && (
-        <div className="fixed inset-0 z-50 flex flex-col" style={{ background: C.card }}>
+        <div className="fixed inset-0 z-50 flex flex-col" style={{ background: M.surface }}>
           <div
             className="flex items-center justify-between px-4 py-4 flex-shrink-0"
-            style={{ borderBottom: `1px solid ${C.border}` }}
+            style={{ borderBottom: `1px solid ${M.border}` }}
           >
-            <div className="font-bold text-xl" style={{ color: C.ink, ...F_PLAYFAIR }}>LinePay 付款</div>
+            <div className="font-bold text-xl" style={{ color: M.ink, letterSpacing: 1 }}>LinePay 付款</div>
             <button
               onClick={() => setShowLinePayQR(false)}
-              className="w-11 h-11 flex items-center justify-center rounded-md text-2xl active:opacity-60 transition-opacity"
-              style={{ color: C.light }}
+              className="w-11 h-11 flex items-center justify-center text-2xl active:opacity-60 transition-opacity"
+              style={{ color: M.muted }}
             >×</button>
           </div>
           <div className="flex-1 flex flex-col items-center justify-center gap-6 px-6">
-            <div className="text-sm" style={{ color: C.mid }}>請掃描 QR Code 完成付款</div>
-            <div className="rounded-2xl p-4" style={{ background: C.bg }}>
+            <div className="text-sm" style={{ color: M.mid }}>請掃描 QR Code 完成付款</div>
+            <div className="p-4" style={{ background: M.bg, borderRadius: 2 }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={linePayQrUrl}
@@ -755,12 +769,11 @@ export default function PosClient({
                 style={{ display: "none" }}
                 className="w-64 h-64 flex-col items-center justify-center text-center"
               >
-                <div className="text-4xl mb-2">📱</div>
-                <div className="text-sm" style={{ color: C.light }}>尚未設定 QR Code</div>
-                <div className="text-xs mt-1" style={{ color: C.light }}>請至後台 LinePay 設定上傳</div>
+                <div className="text-sm mb-1" style={{ color: M.mid }}>尚未設定 QR Code</div>
+                <div className="text-xs" style={{ color: M.muted }}>請至後台 LinePay 設定上傳</div>
               </div>
             </div>
-            <div className="font-bold" style={{ color: C.sage, fontSize: 40, ...F_PLAYFAIR }}>
+            <div className="font-bold" style={{ color: M.ink, fontSize: 40, fontVariantNumeric: "tabular-nums" }}>
               ${cartTotal.toLocaleString()}
             </div>
           </div>
@@ -768,8 +781,8 @@ export default function PosClient({
             <button
               onClick={() => doCheckout("linepay")}
               disabled={!!checkoutLoading}
-              className="w-full font-semibold py-5 rounded-xl text-xl active:opacity-90 transition-opacity disabled:opacity-60"
-              style={{ background: C.terra, color: "#fff" }}
+              className="w-full font-semibold py-5 text-xl active:opacity-90 transition-opacity disabled:opacity-60"
+              style={{ background: M.ink, color: "#fff", borderRadius: 2, letterSpacing: 1 }}
             >
               {checkoutLoading === "linepay" ? "結帳中..." : "✓ 已收款，完成結帳"}
             </button>
@@ -779,25 +792,25 @@ export default function PosClient({
 
       {/* ═══ 今日銷售明細 ═══ */}
       {showTodaySales && (
-        <div className="fixed inset-0 z-50 flex flex-col" style={{ background: C.card }}>
+        <div className="fixed inset-0 z-50 flex flex-col" style={{ background: M.surface }}>
           <div
             className="flex items-center justify-between px-4 py-4 flex-shrink-0"
-            style={{ borderBottom: `1px solid ${C.border}` }}
+            style={{ borderBottom: `1px solid ${M.border}` }}
           >
-            <div className="font-bold text-lg" style={{ color: C.ink }}>今日銷售明細</div>
+            <div className="font-bold text-lg" style={{ color: M.ink }}>今日銷售明細</div>
             <button
               onClick={() => setShowTodaySales(false)}
-              className="w-11 h-11 flex items-center justify-center rounded-md text-2xl active:opacity-60 transition-opacity"
-              style={{ color: C.light }}
+              className="w-11 h-11 flex items-center justify-center text-2xl active:opacity-60 transition-opacity"
+              style={{ color: M.muted }}
             >×</button>
           </div>
 
           <div className="flex-1 overflow-y-auto px-4 py-3">
             {todaySalesLoading ? (
-              <div className="text-center py-16 text-sm" style={{ color: C.light }}>載入中...</div>
+              <div className="text-center py-16 text-sm" style={{ color: M.muted }}>載入中...</div>
             ) : todaySales.length === 0 ? (
-              <div className="text-center py-16" style={{ color: C.light }}>
-                <div className="text-4xl mb-2">📭</div>
+              <div className="text-center py-16" style={{ color: M.muted }}>
+                <div className="text-sm mb-2" style={{ fontSize: 36, color: M.border }}>—</div>
                 <div className="text-sm">今日尚未有銷售紀錄</div>
               </div>
             ) : (
@@ -807,29 +820,29 @@ export default function PosClient({
                   return (
                     <div
                       key={item.product_id}
-                      className="rounded-lg px-4 py-3 flex items-center gap-3"
-                      style={{ background: C.bg }}
+                      className="px-4 py-3 flex items-center gap-3"
+                      style={{ background: M.bg, borderRadius: 2 }}
                     >
                       <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm truncate" style={{ color: C.ink }}>{item.product_name}</div>
-                        <div className="text-xs mt-0.5" style={{ color: C.mid }}>
+                        <div className="font-medium text-sm truncate" style={{ color: M.ink }}>{item.product_name}</div>
+                        <div className="text-xs mt-0.5" style={{ color: M.mid }}>
                           ${item.unit_price} × {item.quantity} 件 ＝
-                          <span className="font-bold ml-1" style={{ color: C.terra }}>
+                          <span className="font-bold ml-1" style={{ color: M.ink, fontVariantNumeric: "tabular-nums" }}>
                             ${(item.unit_price * item.quantity).toLocaleString()}
                           </span>
                         </div>
                       </div>
                       <div className="text-center flex-shrink-0">
-                        <div className="text-xl font-bold" style={{ color: C.ink, ...F_PLAYFAIR }}>{item.quantity}</div>
-                        <div className="text-xs" style={{ color: C.light }}>件</div>
+                        <div className="text-xl font-bold" style={{ color: M.ink }}>{item.quantity}</div>
+                        <div className="text-xs" style={{ color: M.muted }}>件</div>
                       </div>
                       {product?.sku && (
                         <button
                           onClick={() => downloadLabel(product)}
-                          className="flex-shrink-0 text-xs font-medium px-3 py-2.5 rounded-lg active:opacity-70 transition-opacity min-h-[44px] flex items-center"
-                          style={{ background: C.hover + "66", color: C.terra, border: `1px solid ${C.border}` }}
+                          className="flex-shrink-0 text-xs font-medium px-3 py-2.5 active:opacity-70 transition-opacity min-h-[44px] flex items-center"
+                          style={{ background: M.surface, color: M.mid, border: `1px solid ${M.border}`, borderRadius: 2 }}
                         >
-                          🏷 標籤
+                          標籤
                         </button>
                       )}
                     </div>
@@ -841,12 +854,12 @@ export default function PosClient({
 
           <div
             className="px-4 pb-6 pt-3 flex-shrink-0"
-            style={{ borderTop: `1px solid ${C.border}` }}
+            style={{ borderTop: `1px solid ${M.border}` }}
           >
-            <div className="text-sm text-center" style={{ color: C.mid }}>
+            <div className="text-sm text-center" style={{ color: M.mid }}>
               共 {todaySales.reduce((s, i) => s + i.quantity, 0)} 件 ·
               總計{" "}
-              <span className="font-bold" style={{ color: C.terra, ...F_PLAYFAIR }}>
+              <span className="font-bold" style={{ color: M.ink, fontVariantNumeric: "tabular-nums" }}>
                 ${todaySales.reduce((s, i) => s + i.unit_price * i.quantity, 0).toLocaleString()}
               </span>
             </div>
@@ -859,8 +872,8 @@ export default function PosClient({
         <div className="fixed inset-0 z-50 bg-black flex flex-col">
           <div className="flex items-center justify-between px-5 py-4 flex-shrink-0">
             <div>
-              <div className="font-bold text-lg" style={{ color: "#fff", ...F_OUTFIT }}>掃描商品條碼</div>
-              <div className="text-xs mt-0.5" style={{ color: "#9ca3af", ...F_OUTFIT }}>將 QR Code 對準框框內</div>
+              <div className="font-bold text-lg" style={{ color: "#fff", ...NOTO }}>掃描商品條碼</div>
+              <div className="text-xs mt-0.5" style={{ color: "#9ca3af", ...NOTO }}>將 QR Code 對準框框內</div>
             </div>
             <button
               onClick={scanClose}
@@ -873,15 +886,15 @@ export default function PosClient({
             <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover" autoPlay muted playsInline />
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="relative w-56 h-56">
-                {/* 掃描框角落 — 陶土棕 */}
-                <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 rounded-tl-lg" style={{ borderColor: C.terra }} />
-                <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 rounded-tr-lg" style={{ borderColor: C.terra }} />
-                <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 rounded-bl-lg" style={{ borderColor: C.terra }} />
-                <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 rounded-br-lg" style={{ borderColor: C.terra }} />
+                {/* 掃描框角落 */}
+                <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4" style={{ borderColor: "#FFFFFF" }} />
+                <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4" style={{ borderColor: "#FFFFFF" }} />
+                <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4" style={{ borderColor: "#FFFFFF" }} />
+                <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4" style={{ borderColor: "#FFFFFF" }} />
                 {/* 掃描線 */}
                 <div
                   className="absolute inset-x-0 top-1/2 h-0.5 opacity-80 animate-pulse"
-                  style={{ background: C.terra }}
+                  style={{ background: "#FFFFFF" }}
                 />
               </div>
             </div>
@@ -890,17 +903,18 @@ export default function PosClient({
           <div className="flex-shrink-0 px-5 py-5 min-h-[80px] flex items-center justify-center">
             {scanMsg ? (
               <div
-                className="w-full text-center px-4 py-3 rounded-xl font-medium text-sm"
+                className="w-full text-center px-4 py-3 font-medium text-sm"
                 style={{
-                  background: scanMsg.startsWith("✅") ? C.sage :
-                               scanMsg.startsWith("❌") ? "#C0392B" :
+                  background: scanMsg.startsWith("✓") ? "rgba(255,255,255,0.2)" :
+                               scanMsg.startsWith("✗") ? "#C0392B" :
                                "rgba(255,255,255,0.15)",
                   color: "#fff",
-                  ...F_OUTFIT,
+                  borderRadius: 2,
+                  ...NOTO,
                 }}
               >{scanMsg}</div>
             ) : (
-              <div className="text-sm text-center" style={{ color: "#6b7280", ...F_OUTFIT }}>等待掃描中...</div>
+              <div className="text-sm text-center" style={{ color: "#6b7280", ...NOTO }}>等待掃描中...</div>
             )}
           </div>
         </div>

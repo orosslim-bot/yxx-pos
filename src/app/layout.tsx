@@ -1,24 +1,11 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Playfair_Display, Outfit } from "next/font/google";
+import { Noto_Sans_TC } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const notoSansTC = Noto_Sans_TC({
+  variable: "--font-noto",
   subsets: ["latin"],
-});
-
-const playfairDisplay = Playfair_Display({
-  variable: "--font-playfair",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  style: ["normal", "italic"],
-  display: "swap",
-});
-
-const outfit = Outfit({
-  variable: "--font-outfit",
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
+  weight: ["300", "400", "500", "700"],
   display: "swap",
 });
 
@@ -41,7 +28,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#ec4899",
+  themeColor: "#333333",
 };
 
 export default function RootLayout({
@@ -50,8 +37,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-Hant" className={`${geistSans.variable} ${playfairDisplay.variable} ${outfit.variable} h-full antialiased`}>
-      <body className="min-h-full bg-gray-50">{children}</body>
+    <html lang="zh-Hant" className={`${notoSansTC.variable} h-full antialiased`}>
+      <body className="min-h-full">{children}</body>
     </html>
   );
 }
