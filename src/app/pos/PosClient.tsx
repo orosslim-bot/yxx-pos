@@ -126,7 +126,10 @@ export default function PosClient({
       .select("*, categories(id, name)")
       .eq("is_active", true)
       .order("name");
-    setProducts((data as Product[]) ?? []);
+    // 只有確實拿到資料才更新，避免 RLS/網路問題清空商品列表
+    if (data && data.length > 0) {
+      setProducts(data as Product[]);
+    }
   }
 
   function addToCart(product: Product) {
@@ -815,39 +818,36 @@ export default function PosClient({
               </div>
             ) : (
               <div className="space-y-2">
-                {todaySales.map((item) => {
-                  const product = products.find((p) => p.id === item.product_id);
-                  return (
-                    <div
-                      key={item.product_id}
-                      className="px-4 py-3 flex items-center gap-3"
-                      style={{ background: M.bg, borderRadius: 2 }}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm truncate" style={{ color: M.ink }}>{item.product_name}</div>
-                        <div className="text-xs mt-0.5" style={{ color: M.mid }}>
-                          ${item.unit_price} × {item.quantity} 件 ＝
-                          <span className="font-bold ml-1" style={{ color: M.ink, fontVariantNumeric: "tabular-nums" }}>
-                            ${(item.unit_price * item.quantity).toLocaleString()}
-                          </span>
-                        </div>
+                {todaySales.map((item) => (
+                  <div
+                    key={item.product_id}
+                    className="px-4 py-3 flex items-center gap-3"
+                    style={{ background: M.bg, borderRadius: 2 }}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm truncate" style={{ color: M.ink }}>{item.product_name}</div>
+                      <div className="text-xs mt-0.5" style={{ color: M.mid }}>
+                        ${item.unit_price} × {item.quantity} 件 ＝
+                        <span className="font-bold ml-1" style={{ color: M.ink, fontVariantNumeric: "tabular-nums" }}>
+                          ${(item.unit_price * item.quantity).toLocaleString()}
+                        </span>
                       </div>
-                      <div className="text-center flex-shrink-0">
-                        <div className="text-xl font-bold" style={{ color: M.ink }}>{item.quantity}</div>
-                        <div className="text-xs" style={{ color: M.muted }}>件</div>
-                      </div>
-                      {product?.sku && (
-                        <button
-                          onClick={() => downloadLabel(product)}
-                          className="flex-shrink-0 text-xs font-medium px-3 py-2.5 active:opacity-70 transition-opacity min-h-[44px] flex items-center"
-                          style={{ background: M.surface, color: M.mid, border: `1px solid ${M.border}`, borderRadius: 2 }}
-                        >
-                          標籤
-                        </button>
-                      )}
                     </div>
-                  );
-                })}
+                    <div className="text-center flex-shrink-0">
+                      <div className="text-xl font-bold" style={{ color: M.ink }}>{item.quantity}</div>
+                      <div className="text-xs" style={{ color: M.muted }}>件</div>
+                    </div>
+                    {item.sku && (
+                      <button
+                        onClick={() => downloadLabel({ sku: item.sku, name: item.product_name, price: item.unit_price })}
+                        className="flex-shrink-0 text-xs font-medium px-3 py-2.5 active:opacity-70 transition-opacity min-h-[44px] flex items-center"
+                        style={{ background: M.surface, color: M.mid, border: `1px solid ${M.border}`, borderRadius: 2 }}
+                      >
+                        標籤
+                      </button>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
           </div>

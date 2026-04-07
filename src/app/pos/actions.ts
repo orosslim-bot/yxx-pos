@@ -76,6 +76,7 @@ export type TodaySaleItem = {
   product_name: string;
   quantity: number;
   unit_price: number;
+  sku?: string | null;
 };
 
 export async function getTodaySales(boothId: number | null): Promise<TodaySaleItem[]> {
@@ -105,6 +106,21 @@ export async function getTodaySales(boothId: number | null): Promise<TodaySaleIt
       }
     });
   });
+
+  const productIds = Object.keys(map);
+  if (productIds.length > 0) {
+    const { data: productData } = await db
+      .from("products")
+      .select("id, sku")
+      .in("id", productIds);
+    const skuMap: Record<string, string | null> = {};
+    (productData ?? []).forEach((p: { id: string; sku: string | null }) => {
+      skuMap[p.id] = p.sku;
+    });
+    Object.values(map).forEach((item) => {
+      item.sku = skuMap[item.product_id] ?? null;
+    });
+  }
 
   return Object.values(map).sort((a, b) => b.quantity - a.quantity);
 }
