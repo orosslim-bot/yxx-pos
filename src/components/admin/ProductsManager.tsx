@@ -12,7 +12,6 @@ import {
   duplicateProduct,
 } from "@/app/admin/products/actions";
 import ExcelJS from "exceljs";
-import JsBarcode from "jsbarcode";
 import { downloadLabel, generateSku } from "@/lib/label-utils";
 
 type Props = {
@@ -236,21 +235,6 @@ export default function ProductsManager({ initialProducts, categories }: Props) 
 
   const displayImage = imagePreview ?? currentImageUrl;
 
-  // 產生條形碼 base64（在 canvas 上繪製）
-  function generateBarcodeBase64(sku: string): string {
-    const c = document.createElement("canvas");
-    JsBarcode(c, sku, {
-      format: "CODE128",
-      displayValue: false,
-      width: 2,
-      height: 60,
-      margin: 4,
-      lineColor: "#000000",
-      background: "#FFFFFF",
-    });
-    return c.toDataURL("image/png").split(",")[1];
-  }
-
   async function downloadAllLabels() {
     // 有勾選則只下載勾選商品，否則下載全部
     const targets =
@@ -264,30 +248,15 @@ export default function ProductsManager({ initialProducts, categories }: Props) 
     try {
       const wb = new ExcelJS.Workbook();
       const ws = wb.addWorksheet("Labels");
-
-      // 欄位寬度：A 品名、B 價格、C 條形碼
       ws.columns = [
         { width: 32 },
         { width: 10 },
-        { width: 26 },
+        { width: 20 },
       ];
 
-      for (let i = 0; i < targets.length; i++) {
-        const p = targets[i];
+      for (const p of targets) {
         const sku = p.sku || generateSku();
-
-        // A: 品名  B: 價格  C: 留空（放圖片）
-        const row = ws.addRow([p.name, p.price, ""]);
-        row.height = 50; // ~67px 容納條形碼
-
-        // 生成條形碼並嵌入 C 欄
-        const base64 = generateBarcodeBase64(sku);
-        const imageId = wb.addImage({ base64, extension: "png" });
-        ws.addImage(imageId, {
-          tl: { col: 2, row: i },       // C 欄（0-indexed col=2）
-          ext: { width: 160, height: 46 },
-          editAs: "oneCell",
-        });
+        ws.addRow([p.name, p.price, sku]);
       }
 
       const buffer = await wb.xlsx.writeBuffer();
