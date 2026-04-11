@@ -46,17 +46,17 @@ export default async function PosPage() {
   const todayStr = new Date().toISOString().slice(0, 10);
   let statsQuery = db
     .from("orders")
-    .select("total")
+    .select("total, payment_method")
     .gte("created_at", `${todayStr}T00:00:00Z`);
   if (booth) {
     statsQuery = statsQuery.eq("booth_id", booth.id);
   }
   const { data: todayOrders } = await statsQuery;
-  const todayTotal = (todayOrders ?? []).reduce(
-    (s: number, o: { total: number }) => s + o.total,
-    0
-  );
-  const todayCount = (todayOrders ?? []).length;
+  const orders = (todayOrders ?? []) as { total: number; payment_method: string }[];
+  const todayTotal = orders.reduce((s, o) => s + o.total, 0);
+  const todayCount = orders.length;
+  const todayCashTotal = orders.filter((o) => o.payment_method === "cash").reduce((s, o) => s + o.total, 0);
+  const todayLinePayTotal = orders.filter((o) => o.payment_method !== "cash").reduce((s, o) => s + o.total, 0);
 
   const linePayQrUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/linepay-qr/qr.png`;
 
@@ -69,6 +69,8 @@ export default async function PosPage() {
       userEmail={user?.email ?? null}
       todayTotal={todayTotal}
       todayCount={todayCount}
+      todayCashTotal={todayCashTotal}
+      todayLinePayTotal={todayLinePayTotal}
       linePayQrUrl={linePayQrUrl}
     />
   );

@@ -18,6 +18,8 @@ type Props = {
   userEmail: string | null;
   todayTotal: number;
   todayCount: number;
+  todayCashTotal: number;
+  todayLinePayTotal: number;
   linePayQrUrl: string;
 };
 
@@ -47,6 +49,8 @@ export default function PosClient({
   userEmail,
   todayTotal: initTodayTotal,
   todayCount: initTodayCount,
+  todayCashTotal: initTodayCashTotal,
+  todayLinePayTotal: initTodayLinePayTotal,
   linePayQrUrl,
 }: Props) {
   const [products, setProducts] = useState<Product[]>(initialProducts);
@@ -54,6 +58,8 @@ export default function PosClient({
   const [activeCategory, setActiveCategory] = useState<number | "all">("all");
   const [todayTotal, setTodayTotal] = useState(initTodayTotal);
   const [todayCount, setTodayCount] = useState(initTodayCount);
+  const [todayCashTotal, setTodayCashTotal] = useState(initTodayCashTotal);
+  const [todayLinePayTotal, setTodayLinePayTotal] = useState(initTodayLinePayTotal);
 
   const [editingPriceId, setEditingPriceId] = useState<string | null>(null);
   const [priceInput, setPriceInput] = useState("");
@@ -288,6 +294,11 @@ export default function PosClient({
       setShowLinePayQR(false);
       setTodayTotal((t) => t + orderTotal);
       setTodayCount((c) => c + 1);
+      if (paymentMethod === "cash") {
+        setTodayCashTotal((t) => t + orderTotal);
+      } else {
+        setTodayLinePayTotal((t) => t + orderTotal);
+      }
       setSuccessMsg(`結帳成功 · ${paymentMethod === "cash" ? "現金" : "LinePay"}`);
       setTimeout(() => setSuccessMsg(null), 4000);
       await refreshProducts();
@@ -377,6 +388,10 @@ export default function PosClient({
             <div className="text-xs leading-none" style={{ color: M.muted }}>今日業績</div>
             <div className="text-sm font-bold mt-0.5" style={{ color: M.ink, fontVariantNumeric: "tabular-nums" }}>
               {todayCount}筆・${todayTotal.toLocaleString()}
+            </div>
+            <div className="text-xs mt-0.5 flex gap-1.5 justify-end" style={{ color: M.muted, fontVariantNumeric: "tabular-nums" }}>
+              <span>💵${todayCashTotal.toLocaleString()}</span>
+              <span>📱${todayLinePayTotal.toLocaleString()}</span>
             </div>
           </button>
 
@@ -898,14 +913,25 @@ export default function PosClient({
           </div>
 
           <div
-            className="px-4 pb-6 pt-3 flex-shrink-0"
+            className="px-4 pb-6 pt-3 flex-shrink-0 space-y-1.5"
             style={{ borderTop: `1px solid ${M.border}` }}
           >
-            <div className="text-sm text-center" style={{ color: M.mid }}>
-              共 {todaySales.reduce((s, i) => s + i.quantity, 0)} 件 ·
-              總計{" "}
+            <div className="flex justify-between text-sm">
+              <span style={{ color: M.mid }}>💵 現金</span>
               <span className="font-bold" style={{ color: M.ink, fontVariantNumeric: "tabular-nums" }}>
-                ${todaySales.reduce((s, i) => s + i.unit_price * i.quantity, 0).toLocaleString()}
+                ${todayCashTotal.toLocaleString()}
+              </span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span style={{ color: M.mid }}>📱 LINE PAY</span>
+              <span className="font-bold" style={{ color: M.ink, fontVariantNumeric: "tabular-nums" }}>
+                ${todayLinePayTotal.toLocaleString()}
+              </span>
+            </div>
+            <div className="flex justify-between text-sm pt-1.5" style={{ borderTop: `1px solid ${M.border}` }}>
+              <span style={{ color: M.mid }}>共 {todaySales.reduce((s, i) => s + i.quantity, 0)} 件・總計</span>
+              <span className="font-bold" style={{ color: M.ink, fontVariantNumeric: "tabular-nums" }}>
+                ${todayTotal.toLocaleString()}
               </span>
             </div>
           </div>
