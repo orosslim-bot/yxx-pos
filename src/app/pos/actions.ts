@@ -77,56 +77,62 @@ export async function checkout(
   return { success: true, orderId: order.id };
 }
 
-export type TodaySaleItem = {
+export type TodayOrderItem = {
   product_id: string;
   product_name: string;
   quantity: number;
   unit_price: number;
-  sku?: string | null;
+  subtotal: number;
 };
 
-export async function getTodaySales(boothId: number | null): Promise<TodaySaleItem[]> {
+export type TodayOrder = {
+  id: string;
+  time: string;
+  payment_method: string;
+  total: number;
+  items: TodayOrderItem[];
+};
+
+export async function getTodayOrders(boothId: number | null): Promise<TodayOrder[]> {
   const db = createServiceClient();
   const todayStr = new Date().toISOString().slice(0, 10);
 
-  type OrderRow = { booth_id: number | null; order_items: { product_id: string; product_name: string; quantity: number; unit_price: number }[] };
+  type OrderRow = {
+    id: string;
+    created_at: string;
+    payment_method: string;
+    total: number;
+    booth_id: number | null;
+    order_items: { product_id: string; product_name: string; quantity: number; unit_price: number; subtotal: number }[];
+  };
 
   let query = db
     .from("orders")
-    .select("booth_id, order_items(product_id, product_name, quantity, unit_price)")
-    .gte("created_at", `${todayStr}T00:00:00Z`);
+    .select("id, created_at, payment_method, total, booth_id, order_items(product_id, product_name, quantity, unit_price, subtotal)")
+    .gte("created_at", `${todayStr}T00:00:00Z`)
+    .order("created_at", { ascending: false });
 
   if (boothId !== null) {
     query = (query as typeof query).eq("booth_id", boothId);
   }
 
   const { data: orders } = await query;
-  const map: Record<string, TodaySaleItem> = {};
 
-  (orders as OrderRow[] ?? []).forEach((order) => {
-    (order.order_items ?? []).forEach((item) => {
-      if (map[item.product_id]) {
-        map[item.product_id].quantity += item.quantity;
-      } else {
-        map[item.product_id] = { ...item };
-      }
-    });
-  });
-
-  const productIds = Object.keys(map);
-  if (productIds.length > 0) {
-    const { data: productData } = await db
-      .from("products")
-      .select("id, sku")
-      .in("id", productIds);
-    const skuMap: Record<string, string | null> = {};
-    (productData ?? []).forEach((p: { id: string; sku: string | null }) => {
-      skuMap[p.id] = p.sku;
-    });
-    Object.values(map).forEach((item) => {
-      item.sku = skuMap[item.product_id] ?? null;
-    });
-  }
-
-  return Object.values(map).sort((a, b) => b.quantity - a.quantity);
+  return (orders as OrderRow[] ?? []).map((order) => ({
+    id: order.id.slice(0, 8).toUpperCase(),
+    time: new Date(order.created_at).toLocaleTimeString("zh-TW", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }),
+    payment_method: order.payment_method,
+    total: order.total,
+    items: (order.order_items ?? []).map((item) => ({
+      product_id: item.product_id,
+      product_name: item.product_name,
+      quantity: item.quantity,
+      unit_price: item.unit_price,
+      subtotal: item.subtotal ?? item.unit_price * item.quantity,
+    })),
+  }));
 }

@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Product, CartItem } from "@/lib/types";
-import { checkout, getTodaySales, TodaySaleItem } from "./actions";
+import { checkout, getTodayOrders, TodayOrder } from "./actions";
 import { boothLogout } from "@/app/(auth)/login/actions";
 import { downloadLabel } from "@/lib/label-utils";
 
@@ -71,7 +71,7 @@ export default function PosClient({
   const prevCartLengthRef = useRef(0);
 
   const [showTodaySales, setShowTodaySales] = useState(false);
-  const [todaySales, setTodaySales] = useState<TodaySaleItem[]>([]);
+  const [todayOrders, setTodayOrders] = useState<TodayOrder[]>([]);
   const [todaySalesLoading, setTodaySalesLoading] = useState(false);
 
   const [checkoutLoading, setCheckoutLoading] = useState<"cash" | "linepay" | null>(null);
@@ -119,8 +119,8 @@ export default function PosClient({
     setShowTodaySales(true);
     setTodaySalesLoading(true);
     try {
-      const data = await getTodaySales(booth?.id ?? null);
-      setTodaySales(data);
+      const data = await getTodayOrders(booth?.id ?? null);
+      setTodayOrders(data);
     } finally {
       setTodaySalesLoading(false);
     }
@@ -871,41 +871,65 @@ export default function PosClient({
           <div className="flex-1 overflow-y-auto px-4 py-3">
             {todaySalesLoading ? (
               <div className="text-center py-16 text-sm" style={{ color: M.muted }}>載入中...</div>
-            ) : todaySales.length === 0 ? (
+            ) : todayOrders.length === 0 ? (
               <div className="text-center py-16" style={{ color: M.muted }}>
                 <div className="text-sm mb-2" style={{ fontSize: 36, color: M.border }}>—</div>
                 <div className="text-sm">今日尚未有銷售紀錄</div>
               </div>
             ) : (
-              <div className="space-y-2">
-                {todaySales.map((item) => (
+              <div className="space-y-3">
+                {todayOrders.map((order) => (
                   <div
-                    key={item.product_id}
-                    className="px-4 py-3 flex items-center gap-3"
-                    style={{ background: M.bg, borderRadius: 2 }}
+                    key={order.id}
+                    style={{ background: M.bg, borderRadius: 4, overflow: "hidden" }}
                   >
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm truncate" style={{ color: M.ink }}>{item.product_name}</div>
-                      <div className="text-xs mt-0.5" style={{ color: M.mid }}>
-                        ${item.unit_price} × {item.quantity} 件 ＝
-                        <span className="font-bold ml-1" style={{ color: M.ink, fontVariantNumeric: "tabular-nums" }}>
-                          ${(item.unit_price * item.quantity).toLocaleString()}
-                        </span>
+                    {/* 訂單標頭 */}
+                    <div
+                      className="flex items-center justify-between px-4 py-2.5"
+                      style={{ borderBottom: `1px solid ${M.border}` }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-mono" style={{ color: M.mid }}>#{order.id}</span>
+                        <span className="text-xs" style={{ color: M.muted }}>{order.time}</span>
                       </div>
+                      {order.payment_method === "cash" ? (
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: "#fef3c7", color: "#92400e" }}>
+                          💵 現金
+                        </span>
+                      ) : (
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: "#d1fae5", color: "#065f46" }}>
+                          📱 LINE PAY
+                        </span>
+                      )}
                     </div>
-                    <div className="text-center flex-shrink-0">
-                      <div className="text-xl font-bold" style={{ color: M.ink }}>{item.quantity}</div>
-                      <div className="text-xs" style={{ color: M.muted }}>件</div>
+
+                    {/* 商品列表 */}
+                    <div className="px-4 py-2 space-y-2">
+                      {order.items.map((item, idx) => (
+                        <div key={idx} className="flex items-center justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm truncate" style={{ color: M.ink }}>{item.product_name}</div>
+                            <div className="text-xs" style={{ color: M.muted }}>
+                              ${item.unit_price.toLocaleString()} × {item.quantity} 件
+                            </div>
+                          </div>
+                          <div className="text-sm font-semibold flex-shrink-0" style={{ color: M.ink, fontVariantNumeric: "tabular-nums" }}>
+                            ${item.subtotal.toLocaleString()}
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    {item.sku && (
-                      <button
-                        onClick={() => downloadLabel({ sku: item.sku, name: item.product_name, price: item.unit_price })}
-                        className="flex-shrink-0 text-xs font-medium px-3 py-2.5 active:opacity-70 transition-opacity min-h-[44px] flex items-center"
-                        style={{ background: M.surface, color: M.mid, border: `1px solid ${M.border}`, borderRadius: 2 }}
-                      >
-                        標籤
-                      </button>
-                    )}
+
+                    {/* 訂單小計 */}
+                    <div
+                      className="flex justify-between items-center px-4 py-2"
+                      style={{ borderTop: `1px solid ${M.border}` }}
+                    >
+                      <span className="text-xs" style={{ color: M.muted }}>小計</span>
+                      <span className="text-sm font-bold" style={{ color: M.ink, fontVariantNumeric: "tabular-nums" }}>
+                        ${order.total.toLocaleString()}
+                      </span>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -929,7 +953,7 @@ export default function PosClient({
               </span>
             </div>
             <div className="flex justify-between text-sm pt-1.5" style={{ borderTop: `1px solid ${M.border}` }}>
-              <span style={{ color: M.mid }}>共 {todaySales.reduce((s, i) => s + i.quantity, 0)} 件・總計</span>
+              <span style={{ color: M.mid }}>共 {todayOrders.reduce((s, o) => s + o.items.reduce((si, i) => si + i.quantity, 0), 0)} 件・總計</span>
               <span className="font-bold" style={{ color: M.ink, fontVariantNumeric: "tabular-nums" }}>
                 ${todayTotal.toLocaleString()}
               </span>
