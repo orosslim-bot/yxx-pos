@@ -24,10 +24,16 @@ type LowStockProduct = {
   low_stock_threshold: number;
   image_url: string | null;
 };
+type TodayOrderDetail = { id: string; time: string; total: number; payment_method: string };
 
 type Props = {
   todayTotal: number;
   todayCount: number;
+  todayCashTotal: number;
+  todayLinePayTotal: number;
+  todayCashCount: number;
+  todayLinePayCount: number;
+  todayOrderDetails: TodayOrderDetail[];
   monthTotal: number;
   weekChartData: WeekDataPoint[];
   top5: Top5Item[];
@@ -43,6 +49,11 @@ function formatMoney(n: number) {
 export default function DashboardClient({
   todayTotal,
   todayCount,
+  todayCashTotal,
+  todayLinePayTotal,
+  todayCashCount,
+  todayLinePayCount,
+  todayOrderDetails,
   monthTotal,
   weekChartData,
   top5,
@@ -121,10 +132,18 @@ export default function DashboardClient({
           <p className="text-2xl font-bold text-pink-500">
             {formatMoney(todayTotal)}
           </p>
+          <div className="mt-2 flex flex-col gap-0.5">
+            <span className="text-xs text-gray-500">💵 現金 <span className="font-semibold text-gray-700">{formatMoney(todayCashTotal)}</span></span>
+            <span className="text-xs text-gray-500">📱 LINE PAY <span className="font-semibold text-gray-700">{formatMoney(todayLinePayTotal)}</span></span>
+          </div>
         </div>
         <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
           <p className="text-xs text-gray-500 mb-1">今日訂單數</p>
           <p className="text-2xl font-bold text-gray-800">{todayCount} 筆</p>
+          <div className="mt-2 flex flex-col gap-0.5">
+            <span className="text-xs text-gray-500">💵 現金 <span className="font-semibold text-gray-700">{todayCashCount} 筆</span></span>
+            <span className="text-xs text-gray-500">📱 LINE PAY <span className="font-semibold text-gray-700">{todayLinePayCount} 筆</span></span>
+          </div>
         </div>
         <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 col-span-2 sm:col-span-1">
           <p className="text-xs text-gray-500 mb-1">本月營業額</p>
@@ -173,6 +192,52 @@ export default function DashboardClient({
             />
           </LineChart>
         </ResponsiveContainer>
+      </div>
+
+      {/* Today Orders Detail */}
+      <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+        <h2 className="text-sm font-semibold text-gray-700 mb-3">
+          今日銷售明細
+          {todayOrderDetails.length > 0 && (
+            <span className="ml-2 text-xs text-gray-400 font-normal">{todayOrderDetails.length} 筆</span>
+          )}
+        </h2>
+        {todayOrderDetails.length === 0 ? (
+          <p className="text-sm text-gray-400">今日尚無銷售記錄</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs text-gray-400 border-b border-gray-100">
+                  <th className="text-left pb-2 font-medium">時間</th>
+                  <th className="text-left pb-2 font-medium">訂單編號</th>
+                  <th className="text-right pb-2 font-medium">金額</th>
+                  <th className="text-right pb-2 font-medium">支付方式</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {todayOrderDetails.map((order) => (
+                  <tr key={order.id} className="hover:bg-gray-50">
+                    <td className="py-2 text-gray-500">{order.time}</td>
+                    <td className="py-2 text-gray-600 font-mono text-xs">#{order.id}</td>
+                    <td className="py-2 text-right font-semibold text-gray-800">{formatMoney(order.total)}</td>
+                    <td className="py-2 text-right">
+                      {order.payment_method === "cash" ? (
+                        <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 text-xs px-2 py-0.5 rounded-full">
+                          💵 現金
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 bg-green-50 text-green-700 text-xs px-2 py-0.5 rounded-full">
+                          📱 LINE PAY
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">

@@ -4,6 +4,7 @@ import DashboardClient from "@/components/admin/DashboardClient";
 
 type OrderItem = { product_name: string; quantity: number };
 type Order = { id: string; created_at: string; total: number; payment_method: string; order_items: OrderItem[] };
+type TodayOrderDetail = { id: string; time: string; total: number; payment_method: string };
 
 export default async function DashboardPage({
   searchParams,
@@ -53,6 +54,20 @@ export default async function DashboardPage({
   const todayTotal = todayOrders.reduce((s, o) => s + o.total, 0);
   const todayCount = todayOrders.length;
 
+  const todayCashOrders = todayOrders.filter((o) => o.payment_method === "cash");
+  const todayLinePayOrders = todayOrders.filter((o) => o.payment_method !== "cash");
+  const todayCashTotal = todayCashOrders.reduce((s, o) => s + o.total, 0);
+  const todayLinePayTotal = todayLinePayOrders.reduce((s, o) => s + o.total, 0);
+
+  const todayOrderDetails: TodayOrderDetail[] = [...todayOrders]
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    .map((o) => ({
+      id: o.id.slice(0, 8).toUpperCase(),
+      time: new Date(o.created_at).toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit", hour12: false }),
+      total: o.total,
+      payment_method: o.payment_method,
+    }));
+
   const monthOrders = orders.filter((o) => o.created_at >= monthStart);
   const monthTotal = monthOrders.reduce((s, o) => s + o.total, 0);
 
@@ -81,6 +96,11 @@ export default async function DashboardPage({
     <DashboardClient
       todayTotal={todayTotal}
       todayCount={todayCount}
+      todayCashTotal={todayCashTotal}
+      todayLinePayTotal={todayLinePayTotal}
+      todayCashCount={todayCashOrders.length}
+      todayLinePayCount={todayLinePayOrders.length}
+      todayOrderDetails={todayOrderDetails}
       monthTotal={monthTotal}
       weekChartData={weekChartData}
       top5={top5}
