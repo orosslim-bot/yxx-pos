@@ -83,6 +83,7 @@ export type TodayOrderItem = {
   quantity: number;
   unit_price: number;
   subtotal: number;
+  sku: string | null;
 };
 
 export type TodayOrder = {
@@ -118,6 +119,23 @@ export async function getTodayOrders(boothId: number | null): Promise<TodayOrder
 
   const { data: orders } = await query;
 
+  // 取得所有商品 SKU
+  const allProductIds = [...new Set(
+    (orders ?? []).flatMap((o: { order_items?: { product_id: string }[] }) =>
+      (o.order_items ?? []).map((i) => i.product_id)
+    )
+  )];
+  const skuMap: Record<string, string | null> = {};
+  if (allProductIds.length > 0) {
+    const { data: productData } = await db
+      .from("products")
+      .select("id, sku")
+      .in("id", allProductIds);
+    (productData ?? []).forEach((p: { id: string; sku: string | null }) => {
+      skuMap[p.id] = p.sku;
+    });
+  }
+
   return (orders as OrderRow[] ?? []).map((order) => ({
     id: order.id.slice(0, 8).toUpperCase(),
     time: new Date(order.created_at).toLocaleTimeString("zh-TW", {
@@ -133,6 +151,7 @@ export async function getTodayOrders(boothId: number | null): Promise<TodayOrder
       quantity: item.quantity,
       unit_price: item.unit_price,
       subtotal: item.subtotal ?? item.unit_price * item.quantity,
+      sku: skuMap[item.product_id] ?? null,
     })),
   }));
 }

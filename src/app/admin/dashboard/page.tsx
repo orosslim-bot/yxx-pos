@@ -5,6 +5,15 @@ import DashboardClient from "@/components/admin/DashboardClient";
 type OrderItem = { product_name: string; quantity: number };
 type Order = { id: string; created_at: string; total: number; payment_method: string; order_items: OrderItem[] };
 type TodayOrderDetail = { id: string; time: string; total: number; payment_method: string };
+type AdminOrder = {
+  id: string;
+  shortId: string;
+  time: string;
+  boothName: string | null;
+  payment_method: string;
+  total: number;
+  itemsSummary: string;
+};
 
 export default async function DashboardPage({
   searchParams,
@@ -38,10 +47,18 @@ export default async function DashboardPage({
     ordersQuery = ordersQuery.eq("booth_id", boothId);
   }
 
-  const [{ data: rawOrders }, { data: allProducts }, { data: booths }] = await Promise.all([
+  // 今日所有攤位的訂單（管理用，不受 boothFilter 限制）
+  const adminOrdersQuery = db
+    .from("orders")
+    .select("id, created_at, payment_method, total, booth_id, booths(name), order_items(product_name, quantity)")
+    .gte("created_at", `${todayStr}T00:00:00Z`)
+    .order("created_at", { ascending: false });
+
+  const [{ data: rawOrders }, { data: allProducts }, { data: booths }, { data: rawAdminOrders }] = await Promise.all([
     ordersQuery,
     db.from("products").select("id, name, sku, stock, low_stock_threshold, image_url").eq("is_active", true),
     db.from("booths").select("id, name").order("id"),
+    adminOrdersQuery,
   ]);
 
   // supabase is used for auth check in admin layout; suppress unused warning
@@ -92,6 +109,30 @@ export default async function DashboardPage({
     .slice(0, 5)
     .map(([name, qty]) => ({ name, qty }));
 
+  type RawAdminOrder = {
+    id: string;
+    created_at: string;
+    payment_method: string;
+    total: number;
+    booths: { name: string } | { name: string }[] | null;
+    order_items: { product_name: string; quantity: number }[];
+  };
+  const adminOrders: AdminOrder[] = ((rawAdminOrders as unknown as RawAdminOrder[]) ?? []).map((o) => {
+    const boothsRaw = o.booths;
+    const boothName = Array.isArray(boothsRaw)
+      ? (boothsRaw[0]?.name ?? null)
+      : (boothsRaw?.name ?? null);
+    return {
+      id: o.id,
+      shortId: o.id.slice(0, 8).toUpperCase(),
+      time: new Date(o.created_at).toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit", hour12: false }),
+      boothName,
+      payment_method: o.payment_method,
+      total: o.total,
+      itemsSummary: (o.order_items ?? []).map((i) => `${i.product_name} ×${i.quantity}`).join("、"),
+    };
+  });
+
   return (
     <DashboardClient
       todayTotal={todayTotal}
@@ -107,6 +148,7 @@ export default async function DashboardPage({
       lowStockProducts={lowStockProducts}
       booths={booths ?? []}
       currentBoothId={boothId}
+      adminOrders={adminOrders}
     />
   );
 }

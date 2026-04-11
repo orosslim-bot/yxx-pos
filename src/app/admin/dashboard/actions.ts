@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { requireAdmin } from "@/lib/require-admin";
 
 type OrderItem = {
@@ -59,4 +60,35 @@ export async function exportMonthlyOrdersCsv(): Promise<string> {
   });
 
   return rows.join("\n");
+}
+
+export async function deleteOrder(orderId: string): Promise<void> {
+  await requireAdmin();
+  const db = createServiceClient();
+
+  // 先取得訂單商品，以便回補庫存
+  const { data: items, error: itemsErr } = await db
+    .from("order_items")
+    .select("product_id, quantity")
+    .eq("order_id", orderId);
+  if (itemsErr) throw new Error(itemsErr.message);
+
+  // 刪除訂單（order_items 由 DB cascade 自動清除）
+  const { error: deleteErr } = await db.from("orders").delete().eq("id", orderId);
+  if (deleteErr) throw new Error(deleteErr.message);
+
+  // 回補庫存
+  for (const item of items ?? []) {
+    const { data: product } = await db
+      .from("products")
+      .select("stock")
+      .eq("id", item.product_id)
+      .single();
+    if (product) {
+      await db
+        .from("products")
+        .update({ stock: product.stock + item.quantity })
+        .eq("id", item.product_id);
+    }
+  }
 }

@@ -11,7 +11,7 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from "recharts";
-import { exportMonthlyOrdersCsv } from "@/app/admin/dashboard/actions";
+import { exportMonthlyOrdersCsv, deleteOrder } from "@/app/admin/dashboard/actions";
 import Image from "next/image";
 
 type WeekDataPoint = { date: string; revenue: number };
@@ -25,6 +25,15 @@ type LowStockProduct = {
   image_url: string | null;
 };
 type TodayOrderDetail = { id: string; time: string; total: number; payment_method: string };
+type AdminOrder = {
+  id: string;
+  shortId: string;
+  time: string;
+  boothName: string | null;
+  payment_method: string;
+  total: number;
+  itemsSummary: string;
+};
 
 type Props = {
   todayTotal: number;
@@ -40,6 +49,7 @@ type Props = {
   lowStockProducts: LowStockProduct[];
   booths: { id: number; name: string }[];
   currentBoothId: number | null;
+  adminOrders: AdminOrder[];
 };
 
 function formatMoney(n: number) {
@@ -60,9 +70,13 @@ export default function DashboardClient({
   lowStockProducts,
   booths,
   currentBoothId,
+  adminOrders: initAdminOrders,
 }: Props) {
   const router = useRouter();
   const [exporting, setExporting] = useState(false);
+  const [adminOrders, setAdminOrders] = useState<AdminOrder[]>(initAdminOrders);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   async function handleExport() {
     setExporting(true);
@@ -316,6 +330,89 @@ export default function DashboardClient({
             </ul>
           )}
         </div>
+      </div>
+
+      {/* Today Admin Orders */}
+      <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+        <h2 className="text-sm font-semibold text-gray-700 mb-3">
+          今日訂單管理
+          {adminOrders.length > 0 && (
+            <span className="ml-2 text-xs text-gray-400 font-normal">{adminOrders.length} 筆</span>
+          )}
+          <span className="ml-2 text-xs text-orange-500 font-normal">（僅老闆可見）</span>
+        </h2>
+        {adminOrders.length === 0 ? (
+          <p className="text-sm text-gray-400">今日尚無訂單</p>
+        ) : (
+          <div className="space-y-2">
+            {adminOrders.map((order) => (
+              <div key={order.id} className="border border-gray-100 rounded-lg overflow-hidden">
+                {/* 訂單資訊列 */}
+                <div className="flex items-center justify-between px-3 py-2.5 bg-gray-50">
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <span className="text-xs font-mono text-gray-500">#{order.shortId}</span>
+                    <span className="text-xs text-gray-400">{order.time}</span>
+                    {order.boothName && (
+                      <span className="text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded">
+                        {order.boothName}
+                      </span>
+                    )}
+                    {order.payment_method === "cash" ? (
+                      <span className="text-xs bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded-full">💵 現金</span>
+                    ) : (
+                      <span className="text-xs bg-green-50 text-green-700 px-1.5 py-0.5 rounded-full">📱 LINE PAY</span>
+                    )}
+                  </div>
+                  <span className="text-sm font-bold text-gray-800 flex-shrink-0 mr-3">
+                    ${order.total.toLocaleString()}
+                  </span>
+                  {confirmDeleteId === order.id ? (
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <span className="text-xs text-gray-500">確定刪除？</span>
+                      <button
+                        disabled={deleting}
+                        onClick={async () => {
+                          setDeleting(true);
+                          try {
+                            await deleteOrder(order.id);
+                            setAdminOrders((prev) => prev.filter((o) => o.id !== order.id));
+                            setConfirmDeleteId(null);
+                          } catch (e) {
+                            alert("刪除失敗：" + (e instanceof Error ? e.message : String(e)));
+                          } finally {
+                            setDeleting(false);
+                          }
+                        }}
+                        className="text-xs px-2 py-1 rounded bg-red-500 text-white disabled:opacity-50"
+                      >
+                        {deleting ? "..." : "確定"}
+                      </button>
+                      <button
+                        onClick={() => setConfirmDeleteId(null)}
+                        className="text-xs px-2 py-1 rounded border border-gray-200 text-gray-500"
+                      >
+                        取消
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmDeleteId(order.id)}
+                      className="text-xs px-3 py-1.5 rounded border border-red-200 text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
+                    >
+                      刪除
+                    </button>
+                  )}
+                </div>
+                {/* 商品摘要 */}
+                {order.itemsSummary && (
+                  <div className="px-3 py-2 text-xs text-gray-500 truncate">
+                    {order.itemsSummary}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -71,6 +71,7 @@ export default function PosClient({
   const prevCartLengthRef = useRef(0);
 
   const [showTodaySales, setShowTodaySales] = useState(false);
+  const [salesTab, setSalesTab] = useState<"orders" | "products">("orders");
   const [todayOrders, setTodayOrders] = useState<TodayOrder[]>([]);
   const [todaySalesLoading, setTodaySalesLoading] = useState(false);
 
@@ -854,113 +855,199 @@ export default function PosClient({
       )}
 
       {/* ═══ 今日銷售明細 ═══ */}
-      {showTodaySales && (
-        <div className="fixed inset-0 z-50 flex flex-col" style={{ background: M.surface }}>
-          <div
-            className="flex items-center justify-between px-4 py-4 flex-shrink-0"
-            style={{ borderBottom: `1px solid ${M.border}` }}
-          >
-            <div className="font-bold text-lg" style={{ color: M.ink }}>今日銷售明細</div>
-            <button
-              onClick={() => setShowTodaySales(false)}
-              className="w-11 h-11 flex items-center justify-center text-2xl active:opacity-60 transition-opacity"
-              style={{ color: M.muted }}
-            >×</button>
-          </div>
+      {showTodaySales && (() => {
+        // 計算去重商品列表（Tab 2 使用）
+        const productMap: Record<string, { product_id: string; product_name: string; unit_price: number; total_qty: number; sku: string | null }> = {};
+        todayOrders.forEach((order) => {
+          order.items.forEach((item) => {
+            if (productMap[item.product_id]) {
+              productMap[item.product_id].total_qty += item.quantity;
+            } else {
+              productMap[item.product_id] = {
+                product_id: item.product_id,
+                product_name: item.product_name,
+                unit_price: item.unit_price,
+                total_qty: item.quantity,
+                sku: item.sku,
+              };
+            }
+          });
+        });
+        const todayProducts = Object.values(productMap).sort((a, b) => b.total_qty - a.total_qty);
 
-          <div className="flex-1 overflow-y-auto px-4 py-3">
-            {todaySalesLoading ? (
-              <div className="text-center py-16 text-sm" style={{ color: M.muted }}>載入中...</div>
-            ) : todayOrders.length === 0 ? (
-              <div className="text-center py-16" style={{ color: M.muted }}>
-                <div className="text-sm mb-2" style={{ fontSize: 36, color: M.border }}>—</div>
-                <div className="text-sm">今日尚未有銷售紀錄</div>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {todayOrders.map((order) => (
-                  <div
-                    key={order.id}
-                    style={{ background: M.bg, borderRadius: 4, overflow: "hidden" }}
-                  >
-                    {/* 訂單標頭 */}
-                    <div
-                      className="flex items-center justify-between px-4 py-2.5"
-                      style={{ borderBottom: `1px solid ${M.border}` }}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-mono" style={{ color: M.mid }}>#{order.id}</span>
-                        <span className="text-xs" style={{ color: M.muted }}>{order.time}</span>
+        return (
+          <div className="fixed inset-0 z-50 flex flex-col" style={{ background: M.surface }}>
+            {/* 標題列 */}
+            <div
+              className="flex items-center justify-between px-4 py-4 flex-shrink-0"
+              style={{ borderBottom: `1px solid ${M.border}` }}
+            >
+              <div className="font-bold text-lg" style={{ color: M.ink }}>今日銷售明細</div>
+              <button
+                onClick={() => setShowTodaySales(false)}
+                className="w-11 h-11 flex items-center justify-center text-2xl active:opacity-60 transition-opacity"
+                style={{ color: M.muted }}
+              >×</button>
+            </div>
+
+            {/* Tab 切換 */}
+            <div className="flex flex-shrink-0" style={{ borderBottom: `1px solid ${M.border}` }}>
+              {(["orders", "products"] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setSalesTab(tab)}
+                  className="flex-1 py-3 text-sm font-medium transition-colors"
+                  style={{
+                    color: salesTab === tab ? M.ink : M.muted,
+                    borderBottom: salesTab === tab ? `2px solid ${M.ink}` : "2px solid transparent",
+                    background: "transparent",
+                  }}
+                >
+                  {tab === "orders" ? "訂單明細" : `商品 & 標籤${todayProducts.length > 0 ? `（${todayProducts.length}）` : ""}`}
+                </button>
+              ))}
+            </div>
+
+            {/* 內容區 */}
+            <div className="flex-1 overflow-y-auto px-4 py-3">
+              {todaySalesLoading ? (
+                <div className="text-center py-16 text-sm" style={{ color: M.muted }}>載入中...</div>
+              ) : todayOrders.length === 0 ? (
+                <div className="text-center py-16" style={{ color: M.muted }}>
+                  <div className="mb-2" style={{ fontSize: 36, color: M.border }}>—</div>
+                  <div className="text-sm">今日尚未有銷售紀錄</div>
+                </div>
+              ) : salesTab === "orders" ? (
+                /* ── Tab 1：訂單明細 ── */
+                <div className="space-y-3">
+                  {todayOrders.map((order) => (
+                    <div key={order.id} style={{ background: M.bg, borderRadius: 4, overflow: "hidden" }}>
+                      <div
+                        className="flex items-center justify-between px-4 py-2.5"
+                        style={{ borderBottom: `1px solid ${M.border}` }}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-mono" style={{ color: M.mid }}>#{order.id}</span>
+                          <span className="text-xs" style={{ color: M.muted }}>{order.time}</span>
+                        </div>
+                        {order.payment_method === "cash" ? (
+                          <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: "#fef3c7", color: "#92400e" }}>
+                            💵 現金
+                          </span>
+                        ) : (
+                          <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: "#d1fae5", color: "#065f46" }}>
+                            📱 LINE PAY
+                          </span>
+                        )}
                       </div>
-                      {order.payment_method === "cash" ? (
-                        <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: "#fef3c7", color: "#92400e" }}>
-                          💵 現金
-                        </span>
-                      ) : (
-                        <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: "#d1fae5", color: "#065f46" }}>
-                          📱 LINE PAY
-                        </span>
-                      )}
-                    </div>
-
-                    {/* 商品列表 */}
-                    <div className="px-4 py-2 space-y-2">
-                      {order.items.map((item, idx) => (
-                        <div key={idx} className="flex items-center justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm truncate" style={{ color: M.ink }}>{item.product_name}</div>
-                            <div className="text-xs" style={{ color: M.muted }}>
-                              ${item.unit_price.toLocaleString()} × {item.quantity} 件
+                      <div className="px-4 py-2 space-y-2">
+                        {order.items.map((item, idx) => (
+                          <div key={idx} className="flex items-center justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm truncate" style={{ color: M.ink }}>{item.product_name}</div>
+                              <div className="text-xs" style={{ color: M.muted }}>
+                                ${item.unit_price.toLocaleString()} × {item.quantity} 件
+                              </div>
+                            </div>
+                            <div className="text-sm font-semibold flex-shrink-0" style={{ color: M.ink, fontVariantNumeric: "tabular-nums" }}>
+                              ${item.subtotal.toLocaleString()}
                             </div>
                           </div>
-                          <div className="text-sm font-semibold flex-shrink-0" style={{ color: M.ink, fontVariantNumeric: "tabular-nums" }}>
-                            ${item.subtotal.toLocaleString()}
-                          </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
+                      <div
+                        className="flex justify-between items-center px-4 py-2"
+                        style={{ borderTop: `1px solid ${M.border}` }}
+                      >
+                        <span className="text-xs" style={{ color: M.muted }}>小計</span>
+                        <span className="text-sm font-bold" style={{ color: M.ink, fontVariantNumeric: "tabular-nums" }}>
+                          ${order.total.toLocaleString()}
+                        </span>
+                      </div>
                     </div>
-
-                    {/* 訂單小計 */}
+                  ))}
+                </div>
+              ) : (
+                /* ── Tab 2：商品 & 標籤 ── */
+                <div className="space-y-2">
+                  {todayProducts.map((p) => (
                     <div
-                      className="flex justify-between items-center px-4 py-2"
-                      style={{ borderTop: `1px solid ${M.border}` }}
+                      key={p.product_id}
+                      className="flex items-center gap-3 px-4 py-3"
+                      style={{ background: M.bg, borderRadius: 4 }}
                     >
-                      <span className="text-xs" style={{ color: M.muted }}>小計</span>
-                      <span className="text-sm font-bold" style={{ color: M.ink, fontVariantNumeric: "tabular-nums" }}>
-                        ${order.total.toLocaleString()}
-                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium truncate" style={{ color: M.ink }}>{p.product_name}</div>
+                        <div className="text-xs mt-0.5" style={{ color: M.muted }}>
+                          ${p.unit_price.toLocaleString()}
+                          {p.sku ? <span className="ml-2">SKU: {p.sku}</span> : <span className="ml-2">未設定 SKU</span>}
+                        </div>
+                        <div className="text-xs mt-0.5" style={{ color: M.mid }}>
+                          今日賣出 <span className="font-semibold">{p.total_qty}</span> 件
+                        </div>
+                      </div>
+                      {p.sku ? (
+                        <button
+                          onClick={() => downloadLabel({ sku: p.sku, name: p.product_name, price: p.unit_price })}
+                          className="flex-shrink-0 text-xs font-medium px-4 active:opacity-70 transition-opacity flex items-center justify-center"
+                          style={{
+                            height: 44,
+                            minWidth: 72,
+                            background: M.surface,
+                            color: M.warm,
+                            border: `1px solid ${M.border}`,
+                            borderRadius: 2,
+                          }}
+                        >
+                          下載標籤
+                        </button>
+                      ) : (
+                        <div
+                          className="flex-shrink-0 text-xs flex items-center justify-center"
+                          style={{
+                            height: 44,
+                            minWidth: 72,
+                            color: M.muted,
+                            border: `1px dashed ${M.border}`,
+                            borderRadius: 2,
+                          }}
+                        >
+                          無 SKU
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
-          <div
-            className="px-4 pb-6 pt-3 flex-shrink-0 space-y-1.5"
-            style={{ borderTop: `1px solid ${M.border}` }}
-          >
-            <div className="flex justify-between text-sm">
-              <span style={{ color: M.mid }}>💵 現金</span>
-              <span className="font-bold" style={{ color: M.ink, fontVariantNumeric: "tabular-nums" }}>
-                ${todayCashTotal.toLocaleString()}
-              </span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span style={{ color: M.mid }}>📱 LINE PAY</span>
-              <span className="font-bold" style={{ color: M.ink, fontVariantNumeric: "tabular-nums" }}>
-                ${todayLinePayTotal.toLocaleString()}
-              </span>
-            </div>
-            <div className="flex justify-between text-sm pt-1.5" style={{ borderTop: `1px solid ${M.border}` }}>
-              <span style={{ color: M.mid }}>共 {todayOrders.reduce((s, o) => s + o.items.reduce((si, i) => si + i.quantity, 0), 0)} 件・總計</span>
-              <span className="font-bold" style={{ color: M.ink, fontVariantNumeric: "tabular-nums" }}>
-                ${todayTotal.toLocaleString()}
-              </span>
+            {/* 底部總計（兩個 Tab 共用） */}
+            <div
+              className="px-4 pb-6 pt-3 flex-shrink-0 space-y-1.5"
+              style={{ borderTop: `1px solid ${M.border}` }}
+            >
+              <div className="flex justify-between text-sm">
+                <span style={{ color: M.mid }}>💵 現金</span>
+                <span className="font-bold" style={{ color: M.ink, fontVariantNumeric: "tabular-nums" }}>
+                  ${todayCashTotal.toLocaleString()}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span style={{ color: M.mid }}>📱 LINE PAY</span>
+                <span className="font-bold" style={{ color: M.ink, fontVariantNumeric: "tabular-nums" }}>
+                  ${todayLinePayTotal.toLocaleString()}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm pt-1.5" style={{ borderTop: `1px solid ${M.border}` }}>
+                <span style={{ color: M.mid }}>共 {todayOrders.reduce((s, o) => s + o.items.reduce((si, i) => si + i.quantity, 0), 0)} 件・總計</span>
+                <span className="font-bold" style={{ color: M.ink, fontVariantNumeric: "tabular-nums" }}>
+                  ${todayTotal.toLocaleString()}
+                </span>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ═══ 條碼掃描器 ═══ */}
       {showScanner && (
