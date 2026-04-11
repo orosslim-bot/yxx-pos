@@ -3,13 +3,13 @@
 import { useState } from "react";
 import { addBooth, updateBooth, deleteBooth } from "./actions";
 
-type Booth = { id: number; name: string; pin: string };
+type Booth = { id: number; name: string };
 
 export default function BoothsManager({ booths: initial }: { booths: Booth[] }) {
   const [booths, setBooths] = useState<Booth[]>(initial);
   const [editId, setEditId] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
-  const [editPin, setEditPin] = useState("");
+  const [editPin, setEditPin] = useState("");  // 空白 = 不更改 PIN
   const [newName, setNewName] = useState("");
   const [newPin, setNewPin] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -23,15 +23,15 @@ export default function BoothsManager({ booths: initial }: { booths: Booth[] }) 
   function startEdit(b: Booth) {
     setEditId(b.id);
     setEditName(b.name);
-    setEditPin(b.pin);
+    setEditPin("");   // 不預填 hash，空白代表「不更改」
     setError(null);
   }
 
   async function handleUpdate(id: number) {
     setError(null);
-    const res = await updateBooth(id, editName, editPin);
+    const res = await updateBooth(id, editName, editPin || undefined);
     if (res.error) { setError(res.error); return; }
-    setBooths((prev) => prev.map((b) => b.id === id ? { ...b, name: editName, pin: editPin } : b));
+    setBooths((prev) => prev.map((b) => b.id === id ? { ...b, name: editName } : b));
     setEditId(null);
     flash("已儲存");
   }
@@ -50,7 +50,6 @@ export default function BoothsManager({ booths: initial }: { booths: Booth[] }) 
     if (res.error) { setError(res.error); return; }
     setNewName("");
     setNewPin("");
-    // refresh list
     window.location.reload();
   }
 
@@ -76,8 +75,9 @@ export default function BoothsManager({ booths: initial }: { booths: Booth[] }) 
                 <input
                   value={editPin}
                   onChange={(e) => setEditPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
-                  placeholder="PIN 碼（4 位數字）"
+                  placeholder="新 PIN 碼（4 位數字，留空保持不變）"
                   maxLength={4}
+                  inputMode="numeric"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                 />
                 <div className="flex gap-2">
@@ -99,19 +99,13 @@ export default function BoothsManager({ booths: initial }: { booths: Booth[] }) 
               <div className="flex items-center justify-between">
                 <div>
                   <div className="font-medium text-gray-800">{b.name}</div>
-                  <div className="text-sm text-gray-400">PIN：{b.pin}</div>
+                  <div className="text-sm text-gray-400">PIN：●●●●</div>
                 </div>
                 <div className="flex gap-2">
-                  <button
-                    onClick={() => startEdit(b)}
-                    className="text-sm text-pink-500 hover:text-pink-700 font-medium"
-                  >
+                  <button onClick={() => startEdit(b)} className="text-sm text-pink-500 hover:text-pink-700 font-medium">
                     編輯
                   </button>
-                  <button
-                    onClick={() => handleDelete(b.id)}
-                    className="text-sm text-red-400 hover:text-red-600 font-medium"
-                  >
+                  <button onClick={() => handleDelete(b.id)} className="text-sm text-red-400 hover:text-red-600 font-medium">
                     刪除
                   </button>
                 </div>
@@ -136,6 +130,7 @@ export default function BoothsManager({ booths: initial }: { booths: Booth[] }) 
             onChange={(e) => setNewPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
             placeholder="PIN 碼（4 位數字）"
             maxLength={4}
+            inputMode="numeric"
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
           />
           <button

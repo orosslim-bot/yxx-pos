@@ -7,5 +7,6 @@ export async function boothLogout() {
   const cookieStore = await cookies();
   cookieStore.delete("booth_id");
   cookieStore.delete("booth_name");
+  cookieStore.delete("booth_sig");
   redirect("/login");
 }

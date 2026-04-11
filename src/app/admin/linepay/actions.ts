@@ -2,11 +2,13 @@
 
 import { createServiceClient } from "@/lib/supabase/service";
 import { revalidatePath } from "next/cache";
+import { requireAdmin } from "@/lib/require-admin";
 
 const BUCKET = "linepay-qr";
 const KEY = "qr.png";
 
 export async function uploadLinePayQr(formData: FormData) {
+  await requireAdmin();
   const file = formData.get("file") as File;
   if (!file || file.size === 0) return { error: "請選擇圖片" };
 

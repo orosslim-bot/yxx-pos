@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { verifyBoothSession } from '@/lib/booth-mac'
 
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
@@ -22,8 +23,14 @@ export async function proxy(request: NextRequest) {
   )
 
   const { data: { user } } = await supabase.auth.getUser()
-  const boothSession = request.cookies.get("booth_id")?.value
-  const isAuthenticated = !!user || !!boothSession
+  const boothId = request.cookies.get("booth_id")?.value
+  const boothName = request.cookies.get("booth_name")?.value
+  const boothSig = request.cookies.get("booth_sig")?.value
+  const isBoothAuthenticated =
+    boothId && boothName && boothSig
+      ? await verifyBoothSession(boothId, boothName, boothSig)
+      : false
+  const isAuthenticated = !!user || isBoothAuthenticated
   const pathname = request.nextUrl.pathname
 
   // 登入相關 API 不需要攔截

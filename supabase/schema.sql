@@ -38,6 +38,8 @@ CREATE TABLE booths (
   id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
   pin TEXT NOT NULL,
+  failed_attempts INTEGER DEFAULT 0,
+  locked_until TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 INSERT INTO booths (name, pin) VALUES ('攤位A', '0001'), ('攤位B', '0002');

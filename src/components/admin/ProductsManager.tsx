@@ -13,7 +13,7 @@ import {
   ensureSku,
 } from "@/app/admin/products/actions";
 import ExcelJS from "exceljs";
-import { downloadLabel } from "@/lib/label-utils";
+import { downloadLabel, drawLabel, LabelProduct } from "@/lib/label-utils";
 
 type Props = {
   initialProducts: Product[];
@@ -43,6 +43,7 @@ export default function ProductsManager({ initialProducts, categories }: Props) 
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
   const [batchDownloading, setBatchDownloading] = useState(false);
+  const [batchImageDownloading, setBatchImageDownloading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
   // 批量選取
@@ -304,6 +305,64 @@ export default function ProductsManager({ initialProducts, categories }: Props) 
     }
   }
 
+  async function downloadAllLabelImages() {
+    const targets =
+      selectedIds.size > 0
+        ? initialProducts.filter((p) => selectedIds.has(p.id))
+        : initialProducts;
+
+    if (targets.length === 0) { alert("沒有可下載的商品"); return; }
+    setBatchImageDownloading(true);
+
+    try {
+      // 批量補齊沒有 SKU 的商品
+      let skuUpdated = false;
+      for (const p of targets) {
+        if (!p.sku) {
+          p.sku = await ensureSku(p.id);
+          skuUpdated = true;
+        }
+      }
+      if (skuUpdated) router.refresh();
+
+      // 產生所有標籤圖片
+      const files: File[] = [];
+      for (const p of targets) {
+        const canvas = await drawLabel(p as LabelProduct);
+        const blob = await new Promise<Blob>((resolve) =>
+          canvas.toBlob((b) => resolve(b!), "image/png")
+        );
+        files.push(new File([blob], `label-${p.sku}.png`, { type: "image/png" }));
+      }
+
+      // 手機：用 Web Share API（彈出分享選單，選「儲存圖像」可存入相冊）
+      if (
+        typeof navigator.share === "function" &&
+        typeof navigator.canShare === "function" &&
+        navigator.canShare({ files })
+      ) {
+        await navigator.share({ files, title: "YXX 商品標籤" });
+      } else {
+        // 桌機退回方案：逐一下載 PNG
+        for (const file of files) {
+          const url = URL.createObjectURL(file);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = file.name;
+          link.click();
+          URL.revokeObjectURL(url);
+          await new Promise((r) => setTimeout(r, 150));
+        }
+      }
+    } catch (err) {
+      if ((err as Error).name !== "AbortError") {
+        alert("批量圖片下載失敗：" + (err as Error).message);
+      }
+    } finally {
+      setBatchImageDownloading(false);
+    }
+  }
+
   const filtered = searchQuery.trim()
     ? initialProducts.filter((p) => {
         const q = searchQuery.toLowerCase();
@@ -324,6 +383,17 @@ export default function ProductsManager({ initialProducts, categories }: Props) 
       <div className="flex items-center justify-between mb-5">
         <h1 className="text-2xl font-bold text-gray-800">商品管理</h1>
         <div className="flex items-center gap-2">
+          <button
+            onClick={downloadAllLabelImages}
+            disabled={batchImageDownloading}
+            className="flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 disabled:opacity-50 text-blue-700 text-sm font-medium px-3 py-2 rounded-lg"
+          >
+            {batchImageDownloading
+              ? "產生中..."
+              : selectedIds.size > 0
+              ? `🖼️ 圖片 ${selectedIds.size} 件`
+              : "🖼️ 批量存圖片"}
+          </button>
           <button
             onClick={downloadAllLabels}
             disabled={batchDownloading}

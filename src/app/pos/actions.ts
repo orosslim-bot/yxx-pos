@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { cookies } from "next/headers";
 import { CartItem } from "@/lib/types";
+import { verifyBoothSession } from "@/lib/booth-mac";
 
 export async function checkout(
   items: CartItem[],
@@ -17,7 +18,12 @@ export async function checkout(
   const cookieStore = await cookies();
   const boothIdStr = cookieStore.get("booth_id")?.value;
   const boothNameStr = cookieStore.get("booth_name")?.value;
-  const booth = boothIdStr && boothNameStr
+  const boothSigStr = cookieStore.get("booth_sig")?.value;
+  const boothValid =
+    boothIdStr && boothNameStr && boothSigStr
+      ? await verifyBoothSession(boothIdStr, boothNameStr, boothSigStr)
+      : false;
+  const booth = boothValid && boothIdStr && boothNameStr
     ? { id: Number(boothIdStr), name: boothNameStr }
     : null;
 
