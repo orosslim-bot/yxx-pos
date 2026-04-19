@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Product, CartItem } from "@/lib/types";
@@ -13,7 +13,7 @@ type ScanControls = { stop: () => Promise<void> };
 
 type Props = {
   initialProducts: Product[];
-  categories?: { id: number; name: string }[]; // [Fix 9] reserved for future category filter
+  categories?: { id: number; name: string }[];
   isAdmin: boolean;
   booth: Booth;
   userEmail: string | null;
@@ -74,22 +74,52 @@ export default function PosClient({
 
   const [scanMsg, setScanMsg] = useState<string | null>(null);
   const [flashItemId, setFlashItemId] = useState<string | null>(null);
-  const [scanSuccessName, setScanSuccessName] = useState<string | null>(null); // [Fix 4]
+  const [scanSuccessName, setScanSuccessName] = useState<string | null>(null);
   const [cameraFacing, setCameraFacing] = useState<"environment" | "user">("environment");
   const [cameraPermissionDenied, setCameraPermissionDenied] = useState(false);
-  const [isCameraLoading, setIsCameraLoading] = useState(true); // [Fix 3]
-  const [fallbackSearch, setFallbackSearch] = useState("");
+  const [isCameraLoading, setIsCameraLoading] = useState(true);
   const [splitRatio, setSplitRatio] = useState(40);
   const [isDragging, setIsDragging] = useState(false);
 
+  // Problem 2: product browser sheet
+  const [showProductSheet, setShowProductSheet] = useState(false);
+  const [sheetCategory, setSheetCategory] = useState(0); // 0 = all
+
+  // Problem 3: search overlay (available even when camera works)
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
   const mainAreaRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ startY: number; startRatio: number } | null>(null);
-  const splitRatioRef = useRef(40); // [Fix 2] tracks live value during drag
-  const scanControlsRef = useRef<ScanControls | null>(null); // [Fix 1]
+  const splitRatioRef = useRef(40);
+  const scanControlsRef = useRef<ScanControls | null>(null);
   const lastScanRef = useRef({ text: "", time: 0 });
   const handleScanResultRef = useRef<(text: string) => void>(() => {});
 
-  // [Fix 2] Initialize CSS variable for split ratio on mount
+  // Derive category tabs from products
+  const categoryTabs = useMemo(() => {
+    const cats = new Map<number, string>();
+    products.forEach((p) => { if (p.categories) cats.set(p.categories.id, p.categories.name); });
+    return [{ id: 0, name: "全部" }, ...Array.from(cats.entries()).map(([id, name]) => ({ id, name }))];
+  }, [products]);
+
+  const sheetProducts = useMemo(
+    () => sheetCategory === 0
+      ? products.filter((p) => p.stock > 0)
+      : products.filter((p) => p.categories?.id === sheetCategory && p.stock > 0),
+    [products, sheetCategory]
+  );
+
+  const searchResults = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return [];
+    return products
+      .filter((p) => p.stock > 0 && (p.name.toLowerCase().includes(q) || (p.sku ?? "").toLowerCase().includes(q)))
+      .slice(0, 10);
+  }, [products, searchQuery]);
+
+  // Initialize CSS variable for split ratio on mount
   useEffect(() => {
     mainAreaRef.current?.style.setProperty("--split", `${splitRatioRef.current}%`);
   }, []);
@@ -106,7 +136,12 @@ export default function PosClient({
     return () => clearTimeout(t);
   }, [scanMsg]);
 
-  // [Fix 1 + Fix 3] Camera scanner — always on, proper async teardown
+  // Focus search input when shown
+  useEffect(() => {
+    if (showSearch) setTimeout(() => searchInputRef.current?.focus(), 80);
+  }, [showSearch]);
+
+  // Camera scanner — always on, no qrbox (remove html5-qrcode's built-in box)
   useEffect(() => {
     let mounted = true;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -119,7 +154,6 @@ export default function PosClient({
         if (!mounted) return;
 
         scanner = new Html5Qrcode("html5-qrcode-region");
-        // [Fix 1] async stop so callers can await completion
         scanControlsRef.current = {
           stop: async () => {
             try { await scanner.stop(); scanner.clear(); } catch {}
@@ -130,7 +164,7 @@ export default function PosClient({
           { facingMode: cameraFacing },
           {
             fps: 10,
-            qrbox: { width: 220, height: 130 },
+            // Problem 1 fix: no qrbox → html5-qrcode won't draw its own scan rectangle
             formatsToSupport: [
               Html5QrcodeSupportedFormats.CODE_128,
               Html5QrcodeSupportedFormats.EAN_13,
@@ -162,24 +196,21 @@ export default function PosClient({
 
     return () => {
       mounted = false;
-      // [Fix 1] null-check prevents double-stop when flipCamera() already cleaned up
       const ctrl = scanControlsRef.current;
       if (ctrl) {
         scanControlsRef.current = null;
-        ctrl.stop(); // fire-and-forget for unmount
+        ctrl.stop();
       }
     };
   }, [cameraFacing]);
 
-  // [Fix 1] Explicit stop before state change — eliminates race condition
   async function flipCamera() {
     const ctrl = scanControlsRef.current;
-    scanControlsRef.current = null; // clear first so cleanup skips it
-    if (ctrl) await ctrl.stop(); // await ensures element is free
+    scanControlsRef.current = null;
+    if (ctrl) await ctrl.stop();
     setCameraFacing((f) => (f === "environment" ? "user" : "environment"));
   }
 
-  // [Fix 4] Auto-add scan result with success toast in camera area
   handleScanResultRef.current = (text: string) => {
     const now = Date.now();
     const sku = text.trim();
@@ -199,7 +230,6 @@ export default function PosClient({
     }, 500);
   };
 
-  // [Fix 2] Drag: CSS variable for zero-re-render smoothness, commit on pointer up
   function handleDividerPointerDown(e: React.PointerEvent) {
     e.currentTarget.setPointerCapture(e.pointerId);
     dragRef.current = { startY: e.clientY, startRatio: splitRatioRef.current };
@@ -218,7 +248,7 @@ export default function PosClient({
   function handleDividerPointerUp() {
     dragRef.current = null;
     setIsDragging(false);
-    setSplitRatio(splitRatioRef.current); // commit to state for re-renders
+    setSplitRatio(splitRatioRef.current);
   }
 
   async function openTodaySales() {
@@ -336,14 +366,10 @@ export default function PosClient({
   const isDisabled = cart.length === 0 || !!checkoutLoading;
   const displayName = booth?.name ?? userEmail?.split("@")[0] ?? "楊雪雪";
 
-  const fallbackProducts = fallbackSearch.trim()
-    ? products
-        .filter((p) => {
-          const q = fallbackSearch.toLowerCase();
-          return (p.name.toLowerCase().includes(q) || (p.sku ?? "").toLowerCase().includes(q)) && p.stock > 0;
-        })
-        .slice(0, 8)
-    : [];
+  const iconBtnStyle: React.CSSProperties = {
+    width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center",
+    background: "rgba(255,255,255,0.15)", borderRadius: "50%", color: "#fff", fontSize: 16,
+  };
 
   return (
     <div className="h-dvh flex flex-col overflow-hidden" style={{ background: M.bg, ...NOTO }}>
@@ -404,16 +430,14 @@ export default function PosClient({
         {/* ── CAMERA (upper) ── */}
         <div
           style={{
-            // [Fix 2] flex reads CSS variable set directly on parent; fallback for first render
             flex: `0 0 var(--split, ${splitRatio}%)`,
             position: "relative",
             background: "#0f0f0f",
             overflow: "hidden",
-            minHeight: 170, // [Fix 5] scan frame is 130px, 170px gives safe padding
+            minHeight: 170,
           }}
         >
           {cameraPermissionDenied ? (
-            /* [Fix 7] Permission denied: show fallback + retry button */
             <div
               className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6"
               style={{ background: "#1a1a1a" }}
@@ -427,45 +451,12 @@ export default function PosClient({
               >
                 🔄 重新嘗試開啟相機
               </button>
-              <div className="w-full max-w-xs">
-                <input
-                  type="search"
-                  value={fallbackSearch}
-                  onChange={(e) => setFallbackSearch(e.target.value)}
-                  placeholder="手動搜尋商品名稱或 SKU..."
-                  className="w-full px-3 py-2.5 text-sm focus:outline-none"
-                  style={{ background: "#2a2a2a", color: "#fff", border: "1px solid #444", borderRadius: 4, ...NOTO }}
-                />
-                {fallbackProducts.length > 0 && (
-                  <div
-                    className="mt-1 overflow-y-auto"
-                    style={{ maxHeight: 160, background: "#222", borderRadius: 4, border: "1px solid #444" }}
-                  >
-                    {fallbackProducts.map((p) => (
-                      <button
-                        key={p.id}
-                        onClick={() => {
-                          addToCart(p);
-                          setFlashItemId(p.id);
-                          setTimeout(() => setFlashItemId(null), 500);
-                          setFallbackSearch("");
-                        }}
-                        className="w-full text-left px-3 py-2.5 text-sm active:opacity-70 transition-opacity"
-                        style={{ color: "#fff", borderBottom: "1px solid #333", ...NOTO }}
-                      >
-                        {p.name}
-                        <span className="ml-2 text-xs" style={{ color: "#888" }}>${p.price}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
             </div>
           ) : (
             <>
               <div id="html5-qrcode-region" className="absolute inset-0" />
 
-              {/* [Fix 3] Camera loading overlay */}
+              {/* Camera loading overlay */}
               {isCameraLoading && (
                 <div
                   className="absolute inset-0 flex flex-col items-center justify-center gap-2 pointer-events-none"
@@ -475,7 +466,7 @@ export default function PosClient({
                 </div>
               )}
 
-              {/* Scan frame overlay */}
+              {/* Problem 1 fix: custom scan frame only — no qrbox in config above */}
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <div style={{ width: 220, height: 130, boxShadow: "0 0 0 9999px rgba(0,0,0,0.45)", position: "relative" }}>
                   <div className="absolute top-0 left-0 w-5 h-5 border-t-2 border-l-2" style={{ borderColor: "#fff" }} />
@@ -485,17 +476,32 @@ export default function PosClient({
                 </div>
               </div>
 
-              {/* [Fix 1] Flip camera — explicit async stop before state change */}
-              <button
-                onClick={flipCamera}
-                className="absolute top-3 right-3 w-10 h-10 flex items-center justify-center active:opacity-60 transition-opacity"
-                style={{ background: "rgba(255,255,255,0.15)", borderRadius: "50%", color: "#fff", fontSize: 18 }}
-                aria-label="切換鏡頭"
-              >
-                🔄
-              </button>
+              {/* Top-right button cluster: Search + Products + Flip */}
+              <div className="absolute top-3 right-3 flex gap-2">
+                {/* Problem 3: Search button */}
+                <button
+                  onClick={() => { setShowSearch((v) => !v); setSearchQuery(""); }}
+                  className="active:opacity-60 transition-opacity"
+                  style={iconBtnStyle}
+                  aria-label="搜尋商品"
+                >🔍</button>
+                {/* Problem 2: Product sheet button */}
+                <button
+                  onClick={() => setShowProductSheet(true)}
+                  className="active:opacity-60 transition-opacity"
+                  style={iconBtnStyle}
+                  aria-label="商品瀏覽"
+                >🛍</button>
+                {/* Flip camera */}
+                <button
+                  onClick={flipCamera}
+                  className="active:opacity-60 transition-opacity"
+                  style={iconBtnStyle}
+                  aria-label="切換鏡頭"
+                >🔄</button>
+              </div>
 
-              {/* [Fix 4] Scan status toast — success (green) or error (red) */}
+              {/* Scan status toast */}
               {(scanSuccessName || scanMsg) && (
                 <div
                   className="absolute bottom-3 left-3 right-3 text-center text-sm py-2 px-3"
@@ -509,11 +515,72 @@ export default function PosClient({
                   {scanSuccessName ? `✓ ${scanSuccessName}` : scanMsg}
                 </div>
               )}
+
+              {/* Problem 3: Search overlay (within camera area) */}
+              {showSearch && (
+                <div
+                  className="absolute inset-0 flex flex-col"
+                  style={{ background: "rgba(0,0,0,0.88)", zIndex: 10 }}
+                >
+                  <div className="flex items-center gap-2 px-3 pt-3 pb-2">
+                    <input
+                      ref={searchInputRef}
+                      type="search"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="品名或 SKU..."
+                      className="flex-1 px-3 py-2 text-sm focus:outline-none"
+                      style={{ background: "#2a2a2a", color: "#fff", border: "1px solid #555", borderRadius: 4, ...NOTO }}
+                    />
+                    <button
+                      onClick={() => { setShowSearch(false); setSearchQuery(""); }}
+                      className="w-9 h-9 flex items-center justify-center text-xl active:opacity-60 flex-shrink-0"
+                      style={{ color: "#aaa" }}
+                    >×</button>
+                  </div>
+                  <div className="flex-1 overflow-y-auto px-3 pb-3">
+                    {searchQuery.trim() === "" ? (
+                      <div className="text-center pt-6 text-sm" style={{ color: "#666", ...NOTO }}>輸入關鍵字搜尋商品</div>
+                    ) : searchResults.length === 0 ? (
+                      <div className="text-center pt-6 text-sm" style={{ color: "#666", ...NOTO }}>找不到符合商品</div>
+                    ) : (
+                      searchResults.map((p) => (
+                        <button
+                          key={p.id}
+                          onClick={() => {
+                            addToCart(p);
+                            setFlashItemId(p.id);
+                            setScanSuccessName(p.name);
+                            setTimeout(() => { setFlashItemId(null); setScanSuccessName(null); }, 500);
+                            setSearchQuery("");
+                          }}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 text-left active:opacity-70 transition-opacity"
+                          style={{ borderBottom: "1px solid #333", ...NOTO }}
+                        >
+                          <div className="w-8 h-8 flex-shrink-0 overflow-hidden" style={{ background: "#333", borderRadius: 2 }}>
+                            {p.image_url ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-xs" style={{ color: "#888" }}>{p.name.slice(0, 1)}</div>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium truncate" style={{ color: "#fff" }}>{p.name}</div>
+                            <div className="text-xs" style={{ color: "#888" }}>${p.price.toLocaleString()} · 庫存{p.stock}</div>
+                          </div>
+                          <div className="text-xs flex-shrink-0" style={{ color: "#16a34a" }}>+ 加入</div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>
 
-        {/* [Fix 10] DRAGGABLE DIVIDER — 44px touch target, 10px visual */}
+        {/* DRAGGABLE DIVIDER — 44px touch target */}
         <div
           onPointerDown={handleDividerPointerDown}
           onPointerMove={handleDividerPointerMove}
@@ -546,7 +613,6 @@ export default function PosClient({
             </div>
           ) : (
             <>
-              {/* Cart header */}
               <div
                 className="flex items-center justify-between px-4"
                 style={{ height: 40, borderBottom: `1px solid ${M.border}`, background: M.surface, position: "sticky", top: 0, zIndex: 1 }}
@@ -554,15 +620,12 @@ export default function PosClient({
                 <span className="text-xs font-medium" style={{ color: M.mid }}>
                   {cart.reduce((s, i) => s + i.quantity, 0)} 件
                 </span>
-                {/* [Fix 6] Confirm before clearing cart */}
                 <button
                   onClick={() => { if (window.confirm("確定清空購物車？")) setCart([]); }}
                   className="text-xs active:opacity-50 transition-opacity"
                   style={{ color: M.muted }}
                 >清空</button>
               </div>
-
-              {/* Items */}
               {cart.map((item, idx) => {
                 const effectivePrice = item.overridePrice ?? item.product.price;
                 const isOverride = item.overridePrice !== undefined;
@@ -758,6 +821,104 @@ export default function PosClient({
             >
               {checkoutLoading === "linepay" ? "結帳中..." : "✓ 已收款，完成結帳"}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ Problem 2: 商品瀏覽 Bottom Sheet ═══ */}
+      {showProductSheet && (
+        <div className="fixed inset-0 z-40 flex flex-col justify-end" style={{ background: "rgba(0,0,0,0.5)" }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowProductSheet(false); }}
+        >
+          <div
+            className="flex flex-col"
+            style={{ background: M.surface, borderRadius: "12px 12px 0 0", maxHeight: "75dvh" }}
+          >
+            {/* Sheet header */}
+            <div
+              className="flex items-center justify-between px-4 pt-4 pb-2 flex-shrink-0"
+              style={{ borderBottom: `1px solid ${M.border}` }}
+            >
+              <div className="font-semibold text-base" style={{ color: M.ink }}>🛍 商品瀏覽</div>
+              <button
+                onClick={() => setShowProductSheet(false)}
+                className="w-10 h-10 flex items-center justify-center text-2xl active:opacity-60 transition-opacity"
+                style={{ color: M.muted }}
+              >×</button>
+            </div>
+
+            {/* Category tabs */}
+            <div
+              className="flex gap-2 px-4 py-2 overflow-x-auto flex-shrink-0"
+              style={{ borderBottom: `1px solid ${M.border}`, scrollbarWidth: "none" }}
+            >
+              {categoryTabs.map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => setSheetCategory(cat.id)}
+                  className="flex-shrink-0 px-3 py-1.5 text-xs font-medium transition-colors active:opacity-70"
+                  style={{
+                    background: sheetCategory === cat.id ? M.ink : M.bg,
+                    color: sheetCategory === cat.id ? "#fff" : M.mid,
+                    borderRadius: 20,
+                    border: `1px solid ${sheetCategory === cat.id ? M.ink : M.border}`,
+                    ...NOTO,
+                  }}
+                >
+                  {cat.name}
+                </button>
+              ))}
+            </div>
+
+            {/* Product grid */}
+            <div className="flex-1 overflow-y-auto p-3">
+              {sheetProducts.length === 0 ? (
+                <div className="text-center py-12 text-sm" style={{ color: M.muted }}>此分類目前無庫存</div>
+              ) : (
+                <div className="grid grid-cols-3 gap-2">
+                  {sheetProducts.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => {
+                        addToCart(p);
+                        setFlashItemId(p.id);
+                        setScanSuccessName(p.name);
+                        setTimeout(() => { setFlashItemId(null); setScanSuccessName(null); }, 500);
+                      }}
+                      className="flex flex-col overflow-hidden active:scale-95 transition-transform"
+                      style={{ background: M.bg, borderRadius: 6, border: `1px solid ${M.border}` }}
+                    >
+                      <div className="w-full aspect-square overflow-hidden" style={{ background: M.border }}>
+                        {p.image_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-2xl">🏷</div>
+                        )}
+                      </div>
+                      <div className="p-1.5">
+                        <div className="text-xs font-medium leading-tight line-clamp-2" style={{ color: M.ink, ...NOTO }}>
+                          {p.name}
+                        </div>
+                        <div className="text-xs mt-0.5 font-semibold" style={{ color: M.accent }}>
+                          ${p.price.toLocaleString()}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Cart count hint */}
+            {cart.length > 0 && (
+              <div
+                className="flex-shrink-0 px-4 py-3 text-center text-sm"
+                style={{ borderTop: `1px solid ${M.border}`, color: M.mid, ...NOTO }}
+              >
+                購物車已有 {cart.reduce((s, i) => s + i.quantity, 0)} 件・${cartTotal.toLocaleString()}
+              </div>
+            )}
           </div>
         </div>
       )}
