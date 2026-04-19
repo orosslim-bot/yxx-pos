@@ -164,8 +164,12 @@ export default function PosClient({
           { facingMode: cameraFacing },
           {
             fps: 10,
-            // Problem 1 fix: no qrbox → html5-qrcode won't draw its own scan rectangle
+            qrbox: (viewfinderWidth: number, viewfinderHeight: number) => ({
+              width: Math.floor(viewfinderWidth * 0.9),
+              height: Math.floor(viewfinderHeight * 0.9),
+            }),
             formatsToSupport: [
+              Html5QrcodeSupportedFormats.QR_CODE,
               Html5QrcodeSupportedFormats.CODE_128,
               Html5QrcodeSupportedFormats.EAN_13,
             ],
@@ -466,15 +470,30 @@ export default function PosClient({
                 </div>
               )}
 
-              {/* Problem 1 fix: custom scan frame only — no qrbox in config above */}
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div style={{ width: 220, height: 130, boxShadow: "0 0 0 9999px rgba(0,0,0,0.45)", position: "relative" }}>
-                  <div className="absolute top-0 left-0 w-5 h-5 border-t-2 border-l-2" style={{ borderColor: "#fff" }} />
-                  <div className="absolute top-0 right-0 w-5 h-5 border-t-2 border-r-2" style={{ borderColor: "#fff" }} />
-                  <div className="absolute bottom-0 left-0 w-5 h-5 border-b-2 border-l-2" style={{ borderColor: "#fff" }} />
-                  <div className="absolute bottom-0 right-0 w-5 h-5 border-b-2 border-r-2" style={{ borderColor: "#fff" }} />
-                </div>
+              {/* Full-frame scan overlay: corner markers + scan line */}
+              <div className="absolute inset-0 pointer-events-none" style={{ margin: "5%" }}>
+                {/* Corner markers */}
+                <div className="absolute top-0 left-0 w-6 h-6 border-t-2 border-l-2" style={{ borderColor: "#fff" }} />
+                <div className="absolute top-0 right-0 w-6 h-6 border-t-2 border-r-2" style={{ borderColor: "#fff" }} />
+                <div className="absolute bottom-0 left-0 w-6 h-6 border-b-2 border-l-2" style={{ borderColor: "#fff" }} />
+                <div className="absolute bottom-0 right-0 w-6 h-6 border-b-2 border-r-2" style={{ borderColor: "#fff" }} />
+                {/* Scan line animation */}
+                <div
+                  className="absolute left-0 right-0"
+                  style={{
+                    height: 2,
+                    background: "linear-gradient(90deg, transparent, #E91E63, transparent)",
+                    animation: "scanLine 2s linear infinite",
+                  }}
+                />
               </div>
+              <style>{`
+                @keyframes scanLine {
+                  0%   { top: 5%; }
+                  50%  { top: 92%; }
+                  100% { top: 5%; }
+                }
+              `}</style>
 
               {/* Top-right button cluster: Search + Products + Flip */}
               <div className="absolute top-3 right-3 flex gap-2">
