@@ -28,6 +28,11 @@ body {
   font-family: var(--font-noto, "Noto Sans TC", system-ui, sans-serif);
 }
 
+/* html5-qrcode 覆蓋 — 隱藏 dashboard UI，讓 video 填滿容器 */
+#html5-qrcode-region__dashboard { display: none !important; }
+#html5-qrcode-region video { object-fit: cover !important; width: 100% !important; height: 100% !important; }
+#html5-qrcode-region canvas { display: none !important; }
+
 /* 全站預設深色（不加 !important，讓 Tailwind text-white 等可正常覆蓋） */
 * {
   color: #333333;

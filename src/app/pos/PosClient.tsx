@@ -9,9 +9,11 @@ import { boothLogout } from "@/app/(auth)/login/actions";
 import { downloadLabel } from "@/lib/label-utils";
 
 type Booth = { id: number; name: string } | null;
+type ScanControls = { stop: () => Promise<void> };
+
 type Props = {
   initialProducts: Product[];
-  categories: { id: number; name: string }[];
+  categories?: { id: number; name: string }[]; // [Fix 9] reserved for future category filter
   isAdmin: boolean;
   booth: Booth;
   userEmail: string | null;
@@ -72,17 +74,25 @@ export default function PosClient({
 
   const [scanMsg, setScanMsg] = useState<string | null>(null);
   const [flashItemId, setFlashItemId] = useState<string | null>(null);
+  const [scanSuccessName, setScanSuccessName] = useState<string | null>(null); // [Fix 4]
   const [cameraFacing, setCameraFacing] = useState<"environment" | "user">("environment");
   const [cameraPermissionDenied, setCameraPermissionDenied] = useState(false);
+  const [isCameraLoading, setIsCameraLoading] = useState(true); // [Fix 3]
   const [fallbackSearch, setFallbackSearch] = useState("");
   const [splitRatio, setSplitRatio] = useState(40);
   const [isDragging, setIsDragging] = useState(false);
 
   const mainAreaRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ startY: number; startRatio: number } | null>(null);
-  const scanControlsRef = useRef<{ stop: () => void } | null>(null);
+  const splitRatioRef = useRef(40); // [Fix 2] tracks live value during drag
+  const scanControlsRef = useRef<ScanControls | null>(null); // [Fix 1]
   const lastScanRef = useRef({ text: "", time: 0 });
   const handleScanResultRef = useRef<(text: string) => void>(() => {});
+
+  // [Fix 2] Initialize CSS variable for split ratio on mount
+  useEffect(() => {
+    mainAreaRef.current?.style.setProperty("--split", `${splitRatioRef.current}%`);
+  }, []);
 
   useEffect(() => {
     if (!errorMsg) return;
@@ -96,7 +106,7 @@ export default function PosClient({
     return () => clearTimeout(t);
   }, [scanMsg]);
 
-  // Camera scanner — always on, restarts on facing change
+  // [Fix 1 + Fix 3] Camera scanner — always on, proper async teardown
   useEffect(() => {
     let mounted = true;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -104,12 +114,16 @@ export default function PosClient({
 
     (async () => {
       try {
+        setIsCameraLoading(true);
         const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import("html5-qrcode");
         if (!mounted) return;
 
         scanner = new Html5Qrcode("html5-qrcode-region");
+        // [Fix 1] async stop so callers can await completion
         scanControlsRef.current = {
-          stop: () => scanner?.stop().then(() => scanner?.clear()).catch(() => {}),
+          stop: async () => {
+            try { await scanner.stop(); scanner.clear(); } catch {}
+          },
         };
 
         await scanner.start(
@@ -134,20 +148,38 @@ export default function PosClient({
           },
           () => {}
         );
-        if (mounted) setCameraPermissionDenied(false);
+        if (mounted) {
+          setCameraPermissionDenied(false);
+          setIsCameraLoading(false);
+        }
       } catch {
-        if (mounted) setCameraPermissionDenied(true);
+        if (mounted) {
+          setCameraPermissionDenied(true);
+          setIsCameraLoading(false);
+        }
       }
     })();
 
     return () => {
       mounted = false;
-      scanControlsRef.current?.stop();
-      scanControlsRef.current = null;
+      // [Fix 1] null-check prevents double-stop when flipCamera() already cleaned up
+      const ctrl = scanControlsRef.current;
+      if (ctrl) {
+        scanControlsRef.current = null;
+        ctrl.stop(); // fire-and-forget for unmount
+      }
     };
   }, [cameraFacing]);
 
-  // Auto-add scan result with 2s same-SKU debounce
+  // [Fix 1] Explicit stop before state change — eliminates race condition
+  async function flipCamera() {
+    const ctrl = scanControlsRef.current;
+    scanControlsRef.current = null; // clear first so cleanup skips it
+    if (ctrl) await ctrl.stop(); // await ensures element is free
+    setCameraFacing((f) => (f === "environment" ? "user" : "environment"));
+  }
+
+  // [Fix 4] Auto-add scan result with success toast in camera area
   handleScanResultRef.current = (text: string) => {
     const now = Date.now();
     const sku = text.trim();
@@ -160,12 +192,17 @@ export default function PosClient({
 
     addToCart(product);
     setFlashItemId(product.id);
-    setTimeout(() => setFlashItemId(null), 500);
+    setScanSuccessName(product.name);
+    setTimeout(() => {
+      setFlashItemId(null);
+      setScanSuccessName(null);
+    }, 500);
   };
 
+  // [Fix 2] Drag: CSS variable for zero-re-render smoothness, commit on pointer up
   function handleDividerPointerDown(e: React.PointerEvent) {
     e.currentTarget.setPointerCapture(e.pointerId);
-    dragRef.current = { startY: e.clientY, startRatio: splitRatio };
+    dragRef.current = { startY: e.clientY, startRatio: splitRatioRef.current };
     setIsDragging(true);
   }
 
@@ -173,13 +210,15 @@ export default function PosClient({
     if (!dragRef.current || !mainAreaRef.current) return;
     const totalH = mainAreaRef.current.getBoundingClientRect().height;
     const dy = e.clientY - dragRef.current.startY;
-    const next = dragRef.current.startRatio + (dy / totalH) * 100;
-    setSplitRatio(Math.max(20, Math.min(75, next)));
+    const next = Math.max(20, Math.min(75, dragRef.current.startRatio + (dy / totalH) * 100));
+    splitRatioRef.current = next;
+    mainAreaRef.current.style.setProperty("--split", `${next}%`);
   }
 
   function handleDividerPointerUp() {
     dragRef.current = null;
     setIsDragging(false);
+    setSplitRatio(splitRatioRef.current); // commit to state for re-renders
   }
 
   async function openTodaySales() {
@@ -308,12 +347,6 @@ export default function PosClient({
 
   return (
     <div className="h-dvh flex flex-col overflow-hidden" style={{ background: M.bg, ...NOTO }}>
-      <style>{`
-        #html5-qrcode-region__dashboard { display: none !important; }
-        #html5-qrcode-region video { object-fit: cover !important; width: 100% !important; height: 100% !important; }
-        #html5-qrcode-region canvas { display: none !important; }
-      `}</style>
-
       {/* ═══ HEADER ═══ */}
       <header
         className="flex-shrink-0 flex items-center gap-2 px-4"
@@ -371,20 +404,29 @@ export default function PosClient({
         {/* ── CAMERA (upper) ── */}
         <div
           style={{
-            flex: `0 0 ${splitRatio}%`,
+            // [Fix 2] flex reads CSS variable set directly on parent; fallback for first render
+            flex: `0 0 var(--split, ${splitRatio}%)`,
             position: "relative",
             background: "#0f0f0f",
             overflow: "hidden",
-            minHeight: 120,
+            minHeight: 170, // [Fix 5] scan frame is 130px, 170px gives safe padding
           }}
         >
           {cameraPermissionDenied ? (
+            /* [Fix 7] Permission denied: show fallback + retry button */
             <div
               className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6"
               style={{ background: "#1a1a1a" }}
             >
               <div style={{ fontSize: 36 }}>📷</div>
               <div className="text-sm text-center" style={{ color: "#aaa", ...NOTO }}>請允許相機權限以使用掃描功能</div>
+              <button
+                onClick={() => window.location.reload()}
+                className="px-4 py-2 text-sm active:opacity-70 transition-opacity"
+                style={{ background: "#2a2a2a", color: "#fff", border: "1px solid #555", borderRadius: 4, ...NOTO }}
+              >
+                🔄 重新嘗試開啟相機
+              </button>
               <div className="w-full max-w-xs">
                 <input
                   type="search"
@@ -423,6 +465,16 @@ export default function PosClient({
             <>
               <div id="html5-qrcode-region" className="absolute inset-0" />
 
+              {/* [Fix 3] Camera loading overlay */}
+              {isCameraLoading && (
+                <div
+                  className="absolute inset-0 flex flex-col items-center justify-center gap-2 pointer-events-none"
+                  style={{ background: "rgba(0,0,0,0.7)" }}
+                >
+                  <div className="text-sm" style={{ color: "#aaa", ...NOTO }}>相機啟動中...</div>
+                </div>
+              )}
+
               {/* Scan frame overlay */}
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <div style={{ width: 220, height: 130, boxShadow: "0 0 0 9999px rgba(0,0,0,0.45)", position: "relative" }}>
@@ -433,9 +485,9 @@ export default function PosClient({
                 </div>
               </div>
 
-              {/* Flip camera */}
+              {/* [Fix 1] Flip camera — explicit async stop before state change */}
               <button
-                onClick={() => setCameraFacing((f) => f === "environment" ? "user" : "environment")}
+                onClick={flipCamera}
                 className="absolute top-3 right-3 w-10 h-10 flex items-center justify-center active:opacity-60 transition-opacity"
                 style={{ background: "rgba(255,255,255,0.15)", borderRadius: "50%", color: "#fff", fontSize: 18 }}
                 aria-label="切換鏡頭"
@@ -443,32 +495,34 @@ export default function PosClient({
                 🔄
               </button>
 
-              {/* Scan status */}
-              {scanMsg && (
+              {/* [Fix 4] Scan status toast — success (green) or error (red) */}
+              {(scanSuccessName || scanMsg) && (
                 <div
                   className="absolute bottom-3 left-3 right-3 text-center text-sm py-2 px-3"
                   style={{
-                    background: (scanMsg.startsWith("找不到") || scanMsg.includes("庫存")) ? M.danger : "rgba(255,255,255,0.15)",
+                    background: scanSuccessName ? "#16a34a" : M.danger,
                     color: "#fff",
                     borderRadius: 4,
                     ...NOTO,
                   }}
                 >
-                  {scanMsg}
+                  {scanSuccessName ? `✓ ${scanSuccessName}` : scanMsg}
                 </div>
               )}
             </>
           )}
         </div>
 
-        {/* ── DRAGGABLE DIVIDER ── */}
+        {/* [Fix 10] DRAGGABLE DIVIDER — 44px touch target, 10px visual */}
         <div
           onPointerDown={handleDividerPointerDown}
           onPointerMove={handleDividerPointerMove}
           onPointerUp={handleDividerPointerUp}
           onPointerCancel={handleDividerPointerUp}
+          role="separator"
+          aria-orientation="horizontal"
           style={{
-            flex: "0 0 10px",
+            flex: "0 0 44px",
             background: isDragging ? M.border : M.bg,
             borderTop: `1px solid ${M.border}`,
             borderBottom: `1px solid ${M.border}`,
@@ -500,8 +554,9 @@ export default function PosClient({
                 <span className="text-xs font-medium" style={{ color: M.mid }}>
                   {cart.reduce((s, i) => s + i.quantity, 0)} 件
                 </span>
+                {/* [Fix 6] Confirm before clearing cart */}
                 <button
-                  onClick={() => setCart([])}
+                  onClick={() => { if (window.confirm("確定清空購物車？")) setCart([]); }}
                   className="text-xs active:opacity-50 transition-opacity"
                   style={{ color: M.muted }}
                 >清空</button>
