@@ -164,10 +164,6 @@ export default function PosClient({
           { facingMode: cameraFacing },
           {
             fps: 10,
-            qrbox: (viewfinderWidth: number, viewfinderHeight: number) => ({
-              width: Math.floor(viewfinderWidth * 0.9),
-              height: Math.floor(viewfinderHeight * 0.9),
-            }),
             formatsToSupport: [
               Html5QrcodeSupportedFormats.QR_CODE,
               Html5QrcodeSupportedFormats.CODE_128,
