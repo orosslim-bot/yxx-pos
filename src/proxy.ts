@@ -62,6 +62,20 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  // 滾動更新：每次有效請求都重設 booth cookie 到期時間（24 小時）
+  if (isBoothAuthenticated && boothId && boothName && boothSig) {
+    const cookieOpts = {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax' as const,
+      maxAge: 60 * 60 * 24,
+      path: '/',
+    }
+    supabaseResponse.cookies.set('booth_id', boothId, cookieOpts)
+    supabaseResponse.cookies.set('booth_name', boothName, cookieOpts)
+    supabaseResponse.cookies.set('booth_sig', boothSig, cookieOpts)
+  }
+
   return supabaseResponse
 }
 

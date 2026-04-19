@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax" as const,
-    maxAge: 60 * 60 * 8, // 8 小時（縮短至安全範圍）
+    maxAge: 60 * 60 * 24, // 24 小時（滾動更新，每次請求自動延長）
     path: "/",
   };
 
