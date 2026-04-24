@@ -81,14 +81,11 @@ export default function PosClient({
   const [splitRatio, setSplitRatio] = useState(40);
   const [isDragging, setIsDragging] = useState(false);
 
-  // Problem 2: product browser sheet
+  // Product browser sheet
   const [showProductSheet, setShowProductSheet] = useState(false);
   const [sheetCategory, setSheetCategory] = useState(0); // 0 = all
-
-  // Problem 3: search overlay (available even when camera works)
-  const [showSearch, setShowSearch] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const searchInputRef = useRef<HTMLInputElement>(null);
+  const [sheetSearchQuery, setSheetSearchQuery] = useState("");
+  const sheetSearchRef = useRef<HTMLInputElement>(null);
 
   const mainAreaRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ startY: number; startRatio: number } | null>(null);
@@ -111,13 +108,13 @@ export default function PosClient({
     [products, sheetCategory]
   );
 
-  const searchResults = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return [];
-    return products
-      .filter((p) => p.stock > 0 && (p.name.toLowerCase().includes(q) || (p.sku ?? "").toLowerCase().includes(q)))
-      .slice(0, 10);
-  }, [products, searchQuery]);
+  const sheetSearchResults = useMemo(() => {
+    const q = sheetSearchQuery.trim().toLowerCase();
+    if (!q) return null;
+    return products.filter(
+      (p) => p.stock > 0 && (p.name.toLowerCase().includes(q) || (p.sku ?? "").toLowerCase().includes(q))
+    );
+  }, [products, sheetSearchQuery]);
 
   // Initialize CSS variable for split ratio on mount
   useEffect(() => {
@@ -136,10 +133,10 @@ export default function PosClient({
     return () => clearTimeout(t);
   }, [scanMsg]);
 
-  // Focus search input when shown
+  // 開啟商品瀏覽時，自動聚焦搜尋框
   useEffect(() => {
-    if (showSearch) setTimeout(() => searchInputRef.current?.focus(), 80);
-  }, [showSearch]);
+    if (showProductSheet) setTimeout(() => sheetSearchRef.current?.focus(), 150);
+  }, [showProductSheet]);
 
   // Camera scanner — always on, no qrbox (remove html5-qrcode's built-in box)
   useEffect(() => {
@@ -163,16 +160,18 @@ export default function PosClient({
         await scanner.start(
           { facingMode: cameraFacing },
           {
-            fps: 10,
+            fps: 15,
             formatsToSupport: [
               Html5QrcodeSupportedFormats.QR_CODE,
               Html5QrcodeSupportedFormats.CODE_128,
               Html5QrcodeSupportedFormats.EAN_13,
+              Html5QrcodeSupportedFormats.EAN_8,
             ],
             videoConstraints: {
               facingMode: { ideal: cameraFacing },
               width: { ideal: 1280 },
               height: { ideal: 720 },
+              advanced: [{ focusMode: "continuous" }],
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
             } as any,
           },
@@ -214,7 +213,7 @@ export default function PosClient({
   handleScanResultRef.current = (text: string) => {
     const now = Date.now();
     const sku = text.trim();
-    if (sku === lastScanRef.current.text && now - lastScanRef.current.time < 2000) return;
+    if (sku === lastScanRef.current.text && now - lastScanRef.current.time < 800) return;
     lastScanRef.current = { text: sku, time: now };
 
     const product = products.find((p) => p.sku === sku);
@@ -491,23 +490,14 @@ export default function PosClient({
                 }
               `}</style>
 
-              {/* Top-right button cluster: Search + Products + Flip */}
+              {/* Top-right button cluster: Products + Flip */}
               <div className="absolute top-3 right-3 flex gap-2">
-                {/* Problem 3: Search button */}
                 <button
-                  onClick={() => { setShowSearch((v) => !v); setSearchQuery(""); }}
-                  className="active:opacity-60 transition-opacity"
-                  style={iconBtnStyle}
-                  aria-label="搜尋商品"
-                >🔍</button>
-                {/* Problem 2: Product sheet button */}
-                <button
-                  onClick={() => setShowProductSheet(true)}
+                  onClick={() => { setShowProductSheet(true); setSheetSearchQuery(""); }}
                   className="active:opacity-60 transition-opacity"
                   style={iconBtnStyle}
                   aria-label="商品瀏覽"
                 >🛍</button>
-                {/* Flip camera */}
                 <button
                   onClick={flipCamera}
                   className="active:opacity-60 transition-opacity"
@@ -531,66 +521,6 @@ export default function PosClient({
                 </div>
               )}
 
-              {/* Problem 3: Search overlay (within camera area) */}
-              {showSearch && (
-                <div
-                  className="absolute inset-0 flex flex-col"
-                  style={{ background: "rgba(0,0,0,0.88)", zIndex: 10 }}
-                >
-                  <div className="flex items-center gap-2 px-3 pt-3 pb-2">
-                    <input
-                      ref={searchInputRef}
-                      type="search"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="品名或 SKU..."
-                      className="flex-1 px-3 py-2 text-sm focus:outline-none"
-                      style={{ background: "#2a2a2a", color: "#fff", border: "1px solid #555", borderRadius: 4, ...NOTO }}
-                    />
-                    <button
-                      onClick={() => { setShowSearch(false); setSearchQuery(""); }}
-                      className="w-9 h-9 flex items-center justify-center text-xl active:opacity-60 flex-shrink-0"
-                      style={{ color: "#aaa" }}
-                    >×</button>
-                  </div>
-                  <div className="flex-1 overflow-y-auto px-3 pb-3">
-                    {searchQuery.trim() === "" ? (
-                      <div className="text-center pt-6 text-sm" style={{ color: "#666", ...NOTO }}>輸入關鍵字搜尋商品</div>
-                    ) : searchResults.length === 0 ? (
-                      <div className="text-center pt-6 text-sm" style={{ color: "#666", ...NOTO }}>找不到符合商品</div>
-                    ) : (
-                      searchResults.map((p) => (
-                        <button
-                          key={p.id}
-                          onClick={() => {
-                            addToCart(p);
-                            setFlashItemId(p.id);
-                            setScanSuccessName(p.name);
-                            setTimeout(() => { setFlashItemId(null); setScanSuccessName(null); }, 500);
-                            setSearchQuery("");
-                          }}
-                          className="w-full flex items-center gap-3 px-3 py-2.5 text-left active:opacity-70 transition-opacity"
-                          style={{ borderBottom: "1px solid #333", ...NOTO }}
-                        >
-                          <div className="w-8 h-8 flex-shrink-0 overflow-hidden" style={{ background: "#333", borderRadius: 2 }}>
-                            {p.image_url ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-xs" style={{ color: "#888" }}>{p.name.slice(0, 1)}</div>
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium truncate" style={{ color: "#fff" }}>{p.name}</div>
-                            <div className="text-xs" style={{ color: "#888" }}>${p.price.toLocaleString()} · 庫存{p.stock}</div>
-                          </div>
-                          <div className="text-xs flex-shrink-0" style={{ color: "#16a34a" }}>+ 加入</div>
-                        </button>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
             </>
           )}
         </div>
@@ -851,7 +781,7 @@ export default function PosClient({
           >
             {/* Sheet header */}
             <div
-              className="flex items-center justify-between px-4 pt-4 pb-2 flex-shrink-0"
+              className="flex items-center justify-between px-4 pt-4 pb-3 flex-shrink-0"
               style={{ borderBottom: `1px solid ${M.border}` }}
             >
               <div className="font-semibold text-base" style={{ color: M.ink }}>🛍 商品瀏覽</div>
@@ -862,36 +792,62 @@ export default function PosClient({
               >×</button>
             </div>
 
-            {/* Category tabs */}
-            <div
-              className="flex gap-2 px-4 py-2 overflow-x-auto flex-shrink-0"
-              style={{ borderBottom: `1px solid ${M.border}`, scrollbarWidth: "none" }}
-            >
-              {categoryTabs.map((cat) => (
-                <button
-                  key={cat.id}
-                  onClick={() => setSheetCategory(cat.id)}
-                  className="flex-shrink-0 px-3 py-1.5 text-xs font-medium transition-colors active:opacity-70"
-                  style={{
-                    background: sheetCategory === cat.id ? M.ink : M.bg,
-                    color: sheetCategory === cat.id ? "#fff" : M.mid,
-                    borderRadius: 20,
-                    border: `1px solid ${sheetCategory === cat.id ? M.ink : M.border}`,
-                    ...NOTO,
-                  }}
-                >
-                  {cat.name}
-                </button>
-              ))}
+            {/* Search input */}
+            <div className="px-4 py-2 flex-shrink-0" style={{ borderBottom: `1px solid ${M.border}` }}>
+              <input
+                ref={sheetSearchRef}
+                type="search"
+                value={sheetSearchQuery}
+                onChange={(e) => setSheetSearchQuery(e.target.value)}
+                placeholder="搜尋品名或 SKU..."
+                className="w-full px-3 py-2 text-sm focus:outline-none"
+                style={{
+                  background: M.bg,
+                  color: M.ink,
+                  border: `1px solid ${M.border}`,
+                  borderRadius: 6,
+                  ...NOTO,
+                }}
+              />
             </div>
 
+            {/* Category tabs（搜尋時隱藏） */}
+            {!sheetSearchQuery.trim() && (
+              <div
+                className="flex gap-2 px-4 py-2 overflow-x-auto flex-shrink-0"
+                style={{ borderBottom: `1px solid ${M.border}`, scrollbarWidth: "none" }}
+              >
+                {categoryTabs.map((cat) => (
+                  <button
+                    key={cat.id}
+                    onClick={() => setSheetCategory(cat.id)}
+                    className="flex-shrink-0 px-3 py-1.5 text-xs font-medium transition-colors active:opacity-70"
+                    style={{
+                      background: sheetCategory === cat.id ? M.ink : M.bg,
+                      color: sheetCategory === cat.id ? "#fff" : M.mid,
+                      borderRadius: 20,
+                      border: `1px solid ${sheetCategory === cat.id ? M.ink : M.border}`,
+                      ...NOTO,
+                    }}
+                  >
+                    {cat.name}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {/* Product grid */}
-            <div className="flex-1 overflow-y-auto p-3">
-              {sheetProducts.length === 0 ? (
-                <div className="text-center py-12 text-sm" style={{ color: M.muted }}>此分類目前無庫存</div>
+            {(() => {
+              const displayedProducts = sheetSearchResults ?? sheetProducts;
+              return (
+              <div className="flex-1 overflow-y-auto p-3">
+              {displayedProducts.length === 0 ? (
+                <div className="text-center py-12 text-sm" style={{ color: M.muted }}>
+                  {sheetSearchQuery.trim() ? "找不到符合商品" : "此分類目前無庫存"}
+                </div>
               ) : (
                 <div className="grid grid-cols-3 gap-2">
-                  {sheetProducts.map((p) => (
+                  {displayedProducts.map((p) => (
                     <button
                       key={p.id}
                       onClick={() => {
@@ -924,6 +880,8 @@ export default function PosClient({
                 </div>
               )}
             </div>
+              );
+            })()}
 
             {/* Cart count hint */}
             {cart.length > 0 && (

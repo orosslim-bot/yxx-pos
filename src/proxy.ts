@@ -2,6 +2,8 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { verifyBoothSession } from '@/lib/booth-mac'
 
+const SESSION_MAX_INACTIVE = 12 * 60 * 60 // 12 小時（秒）
+
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
@@ -33,7 +35,7 @@ export async function proxy(request: NextRequest) {
   const isAuthenticated = !!user || isBoothAuthenticated
   const pathname = request.nextUrl.pathname
 
-  // 登入相關 API 不需要攔截
+  // API 路由直接放行
   if (pathname.startsWith('/api/')) {
     return supabaseResponse
   }
@@ -47,13 +49,10 @@ export async function proxy(request: NextRequest) {
     return supabaseResponse
   }
 
-  if (pathname.startsWith('/admin')) {
-    if (!user) {
-      const url = request.nextUrl.clone()
-      url.pathname = '/login'
-      return NextResponse.redirect(url)
-    }
-    return supabaseResponse
+  if (pathname.startsWith('/admin') && !user) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/login'
+    return NextResponse.redirect(url)
   }
 
   if (!isAuthenticated) {
@@ -62,13 +61,33 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // 滾動更新：每次有效請求都重設 booth cookie 到期時間（24 小時）
+  // ── 12 小時閒置自動登出 ──
+  const lastActiveRaw = request.cookies.get('last_active')?.value
+  const lastActiveTime = lastActiveRaw ? parseInt(lastActiveRaw, 10) : null
+  const now = Math.floor(Date.now() / 1000)
+
+  if (lastActiveTime !== null && now - lastActiveTime > SESSION_MAX_INACTIVE) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/api/force-logout'
+    return NextResponse.redirect(url)
+  }
+
+  // 更新最後活動時間（滾動）
+  supabaseResponse.cookies.set('last_active', String(now), {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax' as const,
+    maxAge: SESSION_MAX_INACTIVE + 600,
+    path: '/',
+  })
+
+  // 滾動更新攤位 cookie
   if (isBoothAuthenticated && boothId && boothName && boothSig) {
     const cookieOpts = {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax' as const,
-      maxAge: 60 * 60 * 24,
+      maxAge: SESSION_MAX_INACTIVE,
       path: '/',
     }
     supabaseResponse.cookies.set('booth_id', boothId, cookieOpts)
