@@ -62,6 +62,10 @@ export default function PosClient({
   const [editingPriceId, setEditingPriceId] = useState<string | null>(null);
   const [priceInput, setPriceInput] = useState("");
 
+  const [overrideTotal, setOverrideTotal] = useState<number | null>(null);
+  const [editingTotal, setEditingTotal] = useState(false);
+  const [totalInput, setTotalInput] = useState("");
+
   const [showTodaySales, setShowTodaySales] = useState(false);
   const [salesTab, setSalesTab] = useState<"orders" | "products">("orders");
   const [todayOrders, setTodayOrders] = useState<TodayOrder[]>([]);
@@ -336,11 +340,10 @@ export default function PosClient({
     setCheckoutLoading(paymentMethod);
     setErrorMsg(null);
     try {
-      await checkout(cart, paymentMethod);
-      const orderTotal = cart.reduce(
-        (s, i) => s + (i.overridePrice ?? i.product.price) * i.quantity, 0
-      );
+      await checkout(cart, paymentMethod, overrideTotal ?? undefined);
+      const orderTotal = finalTotal;
       setCart([]);
+      setOverrideTotal(null);
       setShowLinePayQR(false);
       setTodayTotal((t) => t + orderTotal);
       setTodayCount((c) => c + 1);
@@ -362,7 +365,25 @@ export default function PosClient({
   const cartTotal = cart.reduce(
     (sum, i) => sum + (i.overridePrice ?? i.product.price) * i.quantity, 0
   );
+  const finalTotal = overrideTotal ?? cartTotal;
   const isDisabled = cart.length === 0 || !!checkoutLoading;
+
+  function openTotalEdit() {
+    setTotalInput(String(finalTotal));
+    setEditingTotal(true);
+  }
+
+  function numpadTotalPress(val: string) {
+    if (val === "C") { setTotalInput(""); return; }
+    if (val === "⌫") { setTotalInput((p) => p.slice(0, -1)); return; }
+    setTotalInput((p) => (p.length >= 6 ? p : p + val));
+  }
+
+  function confirmTotalEdit() {
+    const v = parseInt(totalInput, 10);
+    if (!isNaN(v) && v >= 0) setOverrideTotal(v === cartTotal ? null : v);
+    setEditingTotal(false);
+  }
   const displayName = booth?.name ?? userEmail?.split("@")[0] ?? "楊雪雪";
 
   const iconBtnStyle: React.CSSProperties = {
@@ -566,7 +587,7 @@ export default function PosClient({
                   {cart.reduce((s, i) => s + i.quantity, 0)} 件
                 </span>
                 <button
-                  onClick={() => { if (window.confirm("確定清空購物車？")) setCart([]); }}
+                  onClick={() => { if (window.confirm("確定清空購物車？")) { setCart([]); setOverrideTotal(null); } }}
                   className="text-xs active:opacity-50 transition-opacity"
                   style={{ color: M.muted }}
                 >清空</button>
@@ -643,12 +664,25 @@ export default function PosClient({
         className="flex-shrink-0 px-4 py-3 flex items-center gap-3"
         style={{ background: M.surface, borderTop: `1px solid ${M.border}` }}
       >
-        <div className="flex-shrink-0 min-w-0">
-          <div className="text-xs leading-none mb-0.5" style={{ color: M.muted }}>總計</div>
-          <div className="font-bold leading-tight" style={{ color: M.accent, fontSize: 28, fontVariantNumeric: "tabular-nums" }}>
-            ${cartTotal.toLocaleString()}
+        <button
+          onClick={() => { if (cart.length > 0) openTotalEdit(); }}
+          disabled={cart.length === 0}
+          className="flex-shrink-0 min-w-0 text-left active:opacity-70 transition-opacity disabled:pointer-events-none"
+        >
+          <div className="text-xs leading-none mb-0.5 flex items-center gap-1" style={{ color: M.muted }}>
+            總計
+            {overrideTotal !== null && <span style={{ color: M.warm, fontSize: 10 }}>已調整 ✎</span>}
+            {overrideTotal === null && cart.length > 0 && <span style={{ fontSize: 10 }}>✎</span>}
           </div>
-        </div>
+          <div className="font-bold leading-tight" style={{ color: M.accent, fontSize: 28, fontVariantNumeric: "tabular-nums" }}>
+            ${finalTotal.toLocaleString()}
+          </div>
+          {overrideTotal !== null && (
+            <div className="text-xs" style={{ color: M.muted, textDecoration: "line-through", fontVariantNumeric: "tabular-nums" }}>
+              原 ${cartTotal.toLocaleString()}
+            </div>
+          )}
+        </button>
         <button
           onClick={() => doCheckout("cash")}
           disabled={isDisabled}
@@ -719,6 +753,59 @@ export default function PosClient({
         </div>
       )}
 
+      {/* ═══ 修改總金額 ═══ */}
+      {editingTotal && (
+        <div className="fixed inset-0 z-50 flex items-end" style={{ background: "rgba(51,51,51,0.4)" }}>
+          <div className="w-full p-4" style={{ background: M.surface, borderRadius: "2px 2px 0 0" }}>
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <div className="font-semibold" style={{ color: M.ink }}>修改總金額</div>
+                <div className="text-xs mt-0.5" style={{ color: M.muted }}>
+                  原計算金額 ${cartTotal.toLocaleString()}
+                </div>
+              </div>
+              <button
+                onClick={() => setEditingTotal(false)}
+                className="w-11 h-11 flex items-center justify-center text-2xl active:opacity-60 transition-opacity"
+                style={{ color: M.muted }}
+              >×</button>
+            </div>
+            <div
+              className="px-4 py-3 text-right text-3xl font-bold mb-4"
+              style={{ background: M.bg, color: M.accent, borderRadius: 2, fontVariantNumeric: "tabular-nums" }}
+            >
+              ${totalInput || "0"}
+            </div>
+            <div className="grid grid-cols-3 gap-2 mb-3">
+              {["1","2","3","4","5","6","7","8","9","C","0","⌫"].map((k) => (
+                <button
+                  key={k}
+                  onClick={() => numpadTotalPress(k)}
+                  className="py-4 text-xl font-bold active:scale-95 transition-transform"
+                  style={
+                    k === "C"  ? { background: "#FEE2E2", color: "#DC2626", borderRadius: 2 } :
+                    k === "⌫" ? { background: M.bg, color: M.warm, border: `1px solid ${M.border}`, borderRadius: 2 } :
+                    { background: M.bg, color: M.ink, border: `1px solid ${M.border}`, borderRadius: 2 }
+                  }
+                >{k}</button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setOverrideTotal(null); setEditingTotal(false); }}
+                className="flex-1 font-medium py-4 text-base active:opacity-90 transition-opacity"
+                style={{ background: M.bg, color: M.mid, border: `1px solid ${M.border}`, borderRadius: 2 }}
+              >恢復原價</button>
+              <button
+                onClick={confirmTotalEdit}
+                className="flex-1 font-semibold py-4 text-lg active:opacity-90 transition-opacity"
+                style={{ background: M.ink, color: "#fff", borderRadius: 2 }}
+              >確認</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ═══ LinePay QR Modal ═══ */}
       {showLinePayQR && (
         <div className="fixed inset-0 z-50 flex flex-col" style={{ background: M.surface }}>
@@ -754,7 +841,7 @@ export default function PosClient({
               </div>
             </div>
             <div className="font-bold" style={{ color: M.ink, fontSize: 40, fontVariantNumeric: "tabular-nums" }}>
-              ${cartTotal.toLocaleString()}
+              ${finalTotal.toLocaleString()}
             </div>
           </div>
           <div className="px-4 pb-8 flex-shrink-0">

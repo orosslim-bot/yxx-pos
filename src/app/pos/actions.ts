@@ -8,7 +8,8 @@ import { verifyBoothSession } from "@/lib/booth-mac";
 
 export async function checkout(
   items: CartItem[],
-  paymentMethod: "cash" | "linepay"
+  paymentMethod: "cash" | "linepay",
+  overrideTotal?: number
 ) {
   const supabase = await createClient();
   const {
@@ -31,7 +32,7 @@ export async function checkout(
 
   const db = createServiceClient();
 
-  const total = items.reduce((sum, item) => {
+  const total = overrideTotal ?? items.reduce((sum, item) => {
     const price = item.overridePrice ?? item.product.price;
     return sum + price * item.quantity;
   }, 0);
