@@ -88,6 +88,7 @@ export default function PosClient({
   const [showProductSheet, setShowProductSheet] = useState(false);
   const [sheetCategory, setSheetCategory] = useState(0); // 0 = all
   const [sheetSearchQuery, setSheetSearchQuery] = useState("");
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const sheetSearchRef = useRef<HTMLInputElement>(null);
 
   const mainAreaRef = useRef<HTMLDivElement>(null);
@@ -139,6 +140,20 @@ export default function PosClient({
   // 開啟商品瀏覽時，自動聚焦搜尋框
   useEffect(() => {
     if (showProductSheet) setTimeout(() => sheetSearchRef.current?.focus(), 150);
+  }, [showProductSheet]);
+
+  // 監聽虛擬鍵盤高度，讓 sheet 浮在鍵盤上方
+  useEffect(() => {
+    if (!showProductSheet) { setKeyboardHeight(0); return; }
+    const vv = window.visualViewport;
+    if (!vv) return;
+    function onResize() {
+      const kh = window.innerHeight - vv!.height;
+      setKeyboardHeight(Math.max(0, kh));
+    }
+    vv.addEventListener("resize", onResize);
+    onResize();
+    return () => { vv.removeEventListener("resize", onResize); setKeyboardHeight(0); };
   }, [showProductSheet]);
 
   // Camera scanner — always on, no qrbox (remove html5-qrcode's built-in box)
@@ -857,14 +872,16 @@ export default function PosClient({
         </div>
       )}
 
-      {/* ═══ Problem 2: 商品瀏覽 Bottom Sheet ═══ */}
+      {/* ═══ 商品瀏覽 Bottom Sheet ═══ */}
       {showProductSheet && (
-        <div className="fixed inset-0 z-40 flex flex-col justify-end" style={{ background: "rgba(0,0,0,0.5)" }}
+        <div
+          className="fixed inset-x-0 top-0 z-40 flex flex-col justify-end"
+          style={{ bottom: keyboardHeight, background: "rgba(0,0,0,0.5)" }}
           onClick={(e) => { if (e.target === e.currentTarget) setShowProductSheet(false); }}
         >
           <div
             className="flex flex-col"
-            style={{ background: M.surface, borderRadius: "12px 12px 0 0", maxHeight: "75dvh" }}
+            style={{ background: M.surface, borderRadius: "12px 12px 0 0", maxHeight: "75%" }}
           >
             {/* Sheet header */}
             <div
