@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
 import { Product, CartItem } from "@/lib/types";
 import { checkout, getTodayOrders, TodayOrder } from "./actions";
 import { boothLogout } from "@/app/(auth)/login/actions";
@@ -265,14 +264,14 @@ export default function PosClient({
     }
   }
 
-  async function refreshProducts() {
-    const supabase = createClient();
-    const { data } = await supabase
-      .from("products")
-      .select("*, categories(id, name)")
-      .eq("is_active", true)
-      .order("name");
-    if (data && data.length > 0) setProducts(data as Product[]);
+  function deductLocalStock(soldCart: CartItem[]) {
+    setProducts((prev) =>
+      prev.map((p) => {
+        const item = soldCart.find((i) => i.product.id === p.id);
+        if (!item) return p;
+        return { ...p, stock: Math.max(0, p.stock - item.quantity) };
+      })
+    );
   }
 
   function addToCart(product: Product) {
@@ -340,8 +339,10 @@ export default function PosClient({
     setCheckoutLoading(paymentMethod);
     setErrorMsg(null);
     try {
-      await checkout(cart, paymentMethod, overrideTotal ?? undefined);
+      const soldCart = [...cart];
+      await checkout(soldCart, paymentMethod, overrideTotal ?? undefined);
       const orderTotal = finalTotal;
+      deductLocalStock(soldCart);
       setCart([]);
       setOverrideTotal(null);
       setShowLinePayQR(false);
@@ -354,7 +355,6 @@ export default function PosClient({
       }
       setSuccessMsg(`結帳成功 · ${paymentMethod === "cash" ? "現金" : "LinePay"}`);
       setTimeout(() => setSuccessMsg(null), 4000);
-      await refreshProducts();
     } catch (err) {
       setErrorMsg((err as Error).message);
     } finally {

@@ -1,4 +1,3 @@
-import JsBarcode from "jsbarcode";
 
 export type LabelProduct = {
   sku: string | null | undefined;
@@ -70,6 +69,7 @@ export async function drawLabel(product: LabelProduct): Promise<HTMLCanvasElemen
   ctx.fillText(String(product.price), W / 2, 95);
 
   // ── 條碼（底部，80% 寬，60px 高，無數字）──
+  const { default: JsBarcode } = await import("jsbarcode");
   const barcodeCanvas = document.createElement("canvas");
   const barcodeW = Math.round(W * 0.8); // 320px
   const barcodeH = 60;
