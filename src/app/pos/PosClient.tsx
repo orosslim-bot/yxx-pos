@@ -97,6 +97,7 @@ export default function PosClient({
   const scanControlsRef = useRef<ScanControls | null>(null);
   const lastScanRef = useRef({ text: "", time: 0 });
   const handleScanResultRef = useRef<(text: string) => void>(() => {});
+  const audioCtxRef = useRef<AudioContext | null>(null);
 
   // Derive category tabs from products
   const categoryTabs = useMemo(() => {
@@ -123,6 +124,23 @@ export default function PosClient({
   // Initialize CSS variable for split ratio on mount
   useEffect(() => {
     mainAreaRef.current?.style.setProperty("--split", `${splitRatioRef.current}%`);
+  }, []);
+
+  // 用戶第一次觸碰時解鎖 AudioContext（瀏覽器安全政策要求）
+  useEffect(() => {
+    function unlock() {
+      if (!audioCtxRef.current) {
+        audioCtxRef.current = new AudioContext();
+      } else if (audioCtxRef.current.state === "suspended") {
+        audioCtxRef.current.resume();
+      }
+    }
+    window.addEventListener("touchstart", unlock, { once: true });
+    window.addEventListener("click", unlock, { once: true });
+    return () => {
+      window.removeEventListener("touchstart", unlock);
+      window.removeEventListener("click", unlock);
+    };
   }, []);
 
   useEffect(() => {
@@ -230,7 +248,8 @@ export default function PosClient({
 
   function playBeep() {
     try {
-      const ctx = new AudioContext();
+      const ctx = audioCtxRef.current;
+      if (!ctx || ctx.state !== "running") return;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.connect(gain);
@@ -240,7 +259,6 @@ export default function PosClient({
       gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
       osc.start(ctx.currentTime);
       osc.stop(ctx.currentTime + 0.08);
-      osc.onended = () => ctx.close();
     } catch {}
   }
 
