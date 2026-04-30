@@ -228,6 +228,22 @@ export default function PosClient({
     setCameraFacing((f) => (f === "environment" ? "user" : "environment"));
   }
 
+  function playBeep() {
+    try {
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = 1800;
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.08);
+      osc.onended = () => ctx.close();
+    } catch {}
+  }
+
   handleScanResultRef.current = (text: string) => {
     const now = Date.now();
     const sku = text.trim();
@@ -238,6 +254,7 @@ export default function PosClient({
     if (!product) { setScanMsg(`找不到 SKU：${sku}`); return; }
     if (product.stock <= 0) { setScanMsg(`「${product.name}」庫存不足`); return; }
 
+    playBeep();
     addToCart(product);
     setFlashItemId(product.id);
     setScanSuccessName(product.name);
